@@ -1,0 +1,412 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  PLATFORM_ADMIN
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum OwnerType {
+  USER
+  ORGANIZATION
+}
+
+enum RepositoryVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum SyncStatus {
+  IDLE
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+enum BackfillStatus {
+  NOT_STARTED
+  QUEUED
+  IN_PROGRESS
+  COMPLETE
+  FAILED
+  PARTIAL
+}
+
+enum ProjectStatus {
+  ONGOING
+  COMPLETE
+  ON_BREAK
+}
+
+enum ActivityDetail {
+  HIDDEN
+  AGGREGATED
+  COMMIT_DETAILS
+}
+
+enum AuthorMatchMethod {
+  GITHUB_USER
+  VERIFIED_EMAIL
+  UNMATCHED
+}
+
+enum SyncTrigger {
+  INITIAL
+  SCHEDULED
+  WEBHOOK
+  ADMIN
+}
+
+enum SyncRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+enum SummaryScope {
+  PRIVATE
+  PUBLIC
+}
+
+enum SummaryGenerationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+// ---------------------------------------------------------------------------
+// Identity and authentication
+// ---------------------------------------------------------------------------
+
+model User {
+  id                    String     @id @default(cuid())
+  githubUserId          String     @unique
+  githubLogin           String
+  displayName           String?
+  avatarUrl             String?
+  profileSlug           String     @unique
+  profileBio            String?
+  profileVisibility     Visibility @default(PRIVATE)
+  searchIndexingEnabled Boolean    @default(false)
+  timezone              String     @default("Asia/Kolkata")
+  role                  UserRole   @default(USER)
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  repositories    UserRepository[]
+  projects        Project[]
+  commits         Commit[]
+  dailyActivities DailyProjectActivity[]
+  dailySummaries  DailySummary[]
+  syncRuns        SyncRun[]
+  authorEmails    AuthorEmail[]
+  settings        UserSettings?
+
+  @@index([githubLogin])
+  @@index([profileVisibility])
+}
+
+// Auth.js-compatible account/token model used by the GitHub OAuth flow.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  disconnectedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// External GitHub identity
+// ---------------------------------------------------------------------------
+
+// Represents the external GitHub repository. This record is not tenant-owned;
+// user-specific tracking and presentation live on UserRepository/Project.
+model GitHubRepository {
+  id                    String               @id @default(cuid())
+  githubRepositoryId    String               @unique
+  ownerLogin            String
+  ownerType             OwnerType
+  name                  String
+  fullName              String
+  description           String?
+  htmlUrl               String
+  visibility            RepositoryVisibility
+  defaultBranch         String
+  isArchived            Boolean              @default(false)
+  isFork                Boolean              @default(false)
+  lastMetadataRefreshAt DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  userRepositories UserRepository[]
+
+  @@index([fullName])
+  @@index([ownerLogin])
+}
+
+// One user's connection to one external repository. Two users may track the
+// same public repository without sharing any user-specific settings.
+model UserRepository {
+  id                   String         @id @default(cuid())
+  userId               String
+  githubRepositoryId   String
+  trackingEnabled      Boolean        @default(false)
+  publicDisplayEnabled Boolean        @default(false)
+  publicActivityDetail ActivityDetail @default(HIDDEN)
+  lastSyncedAt         DateTime?
+  syncStatus           SyncStatus     @default(IDLE)
+  backfillStatus       BackfillStatus @default(NOT_STARTED)
+  syncCursor           String?
+  backfillCursor       String?
+  firstDiscoveredAt    DateTime       @default(now())
+  lastDiscoveredAt     DateTime       @default(now())
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  githubRepository   GitHubRepository @relation(fields: [githubRepositoryId], references: [id], onDelete: Restrict)
+  project            Project?
+  commits            Commit[]
+  syncRuns           SyncRun[]
+
+  @@unique([userId, githubRepositoryId])
+  @@index([userId])
+  @@index([userId, trackingEnabled])
+  @@index([githubRepositoryId])
+  @@index([syncStatus])
+  @@index([backfillStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Tenant-owned presentation data
+// ---------------------------------------------------------------------------
+
+model Project {
+  id                      String        @id @default(cuid())
+  userId                  String
+  userRepositoryId        String        @unique
+  slug                    String
+  displayTitle            String
+  shortDescription        String?
+  status                  ProjectStatus @default(ONGOING)
+  visibility              Visibility    @default(PRIVATE)
+  demoUrl                 String?
+  publicReadmeMarkdown    String?
+  publicReadmeUpdatedAt   DateTime?
+  firstCommitAt           DateTime?
+  latestCommitAt          DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRepository   UserRepository        @relation(fields: [userRepositoryId], references: [id], onDelete: Cascade)
+  dailyActivities  DailyProjectActivity[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+  @@index([userId, visibility])
+  @@index([userId, status])
+}
+
+model Commit {
+  id                  String            @id @default(cuid())
+  userId              String
+  userRepositoryId    String
+  sha                 String
+  authorGithubUserId  String?
+  authorLogin         String?
+  authorName          String
+  authorEmail         String?
+  authorDate          DateTime
+  committerDate       DateTime
+  message             String
+  htmlUrl             String
+  additions           Int?
+  deletions           Int?
+  changedFiles        Int?
+  authorMatchMethod   AuthorMatchMethod
+  isOnDefaultBranch   Boolean           @default(true)
+  firstSeenAt         DateTime          @default(now())
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRepository   UserRepository @relation(fields: [userRepositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userRepositoryId, sha])
+  @@index([userId, authorDate])
+  @@index([userRepositoryId, authorDate])
+  @@index([userId, authorGithubUserId])
+  @@index([userId, isOnDefaultBranch])
+}
+
+model DailyProjectActivity {
+  id              String   @id @default(cuid())
+  userId          String
+  projectId       String
+  date            DateTime @db.Date
+  timezone        String
+  commitCount     Int      @default(0)
+  additions       Int?
+  deletions       Int?
+  changedFiles    Int?
+  firstCommitAt   DateTime?
+  lastCommitAt    DateTime?
+  lastCalculatedAt DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date, timezone])
+  @@index([userId, date])
+  @@index([projectId, date])
+}
+
+model DailySummary {
+  id                String                  @id @default(cuid())
+  userId            String
+  date              DateTime                @db.Date
+  timezone          String
+  scope             SummaryScope
+  headline          String?
+  summary           String?
+  projectHighlights Json?
+  dataVersion       String
+  inputHash         String?
+  provider          String?
+  modelName         String?                 @map("model")
+  generationStatus  SummaryGenerationStatus @default(PENDING)
+  errorMessage      String?
+  generatedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, timezone, scope, dataVersion])
+  @@index([userId, date])
+  @@index([userId, generationStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Sync and author identity
+// ---------------------------------------------------------------------------
+
+model SyncRun {
+  id                String        @id @default(cuid())
+  userId            String
+  userRepositoryId  String?
+  trigger           SyncTrigger
+  status            SyncRunStatus @default(PENDING)
+  startedAt         DateTime      @default(now())
+  finishedAt        DateTime?
+  pagesProcessed    Int           @default(0)
+  commitsProcessed  Int           @default(0)
+  commitsInserted   Int           @default(0)
+  errorCode         String?
+  errorMessage      String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRepository   UserRepository? @relation(fields: [userRepositoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userRepositoryId, startedAt])
+  @@index([userId, status])
+}
+
+model AuthorEmail {
+  id             String   @id @default(cuid())
+  userId         String
+  email          String
+  verifiedByUser Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+  @@index([userId])
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------
+// User-scoped settings
+// ---------------------------------------------------------------------------
+
+model UserSettings {
+  id                          String         @id @default(cuid())
+  userId                      String         @unique
+  summariesEnabled            Boolean        @default(false)
+  allowPrivateMetadataForLlm  Boolean        @default(false)
+  summaryProvider             String?
+  summaryModel                String?
+  defaultActivityDetail       ActivityDetail @default(AGGREGATED)
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
