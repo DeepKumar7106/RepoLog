@@ -17,6 +17,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const body = updateUserRepositorySchema.parse(await readJson(request));
     const record = await services.userRepositories.update(tenant, repositoryId, body);
 
+    if (body.trackingEnabled) {
+      await services.projects.ensureForUserRepository(tenant, repositoryId);
+    }
+
     return NextResponse.json({ data: toUserRepositoryDto(record) });
   } catch (error) {
     return handleApiError(error);

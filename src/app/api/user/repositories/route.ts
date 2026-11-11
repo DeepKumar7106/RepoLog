@@ -51,6 +51,10 @@ export async function PATCH(request: Request) {
     const { ids, ...data } = body;
     const updated = await services.userRepositories.updateMany(tenant, data, ids);
 
+    if (data.trackingEnabled) {
+      await services.projects.ensureForTrackedRepositories(tenant);
+    }
+
     return NextResponse.json({ data: { updated } });
   } catch (error) {
     return handleApiError(error);

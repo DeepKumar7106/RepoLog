@@ -1,4 +1,5 @@
-import type {
+﻿import type {
+  ActivityDetail,
   OwnerType,
   Prisma,
   ProjectStatus,
@@ -18,9 +19,15 @@ export type ProjectDto = {
   status: ProjectStatus;
   visibility: Visibility;
   demoUrl: string | null;
+  publicReadmeMarkdown: string | null;
   publicReadmeUpdatedAt: string | null;
   firstCommitAt: string | null;
   latestCommitAt: string | null;
+  userRepository: {
+    id: string;
+    publicDisplayEnabled: boolean;
+    publicActivityDetail: ActivityDetail;
+  };
   repository: {
     id: string;
     githubRepositoryId: string;
@@ -51,9 +58,15 @@ export function toProjectDto(record: ProjectRecord): ProjectDto {
     status: record.status,
     visibility: record.visibility,
     demoUrl: record.demoUrl,
+    publicReadmeMarkdown: record.publicReadmeMarkdown,
     publicReadmeUpdatedAt: toIso(record.publicReadmeUpdatedAt),
     firstCommitAt: toIso(record.firstCommitAt),
     latestCommitAt: toIso(record.latestCommitAt),
+    userRepository: {
+      id: record.userRepository.id,
+      publicDisplayEnabled: record.userRepository.publicDisplayEnabled,
+      publicActivityDetail: record.userRepository.publicActivityDetail,
+    },
     repository: {
       id: repository.id,
       githubRepositoryId: repository.githubRepositoryId,

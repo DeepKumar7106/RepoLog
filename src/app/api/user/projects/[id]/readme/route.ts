@@ -1,11 +1,23 @@
-import { handleApiError, notImplementedError, requireApiTenant } from "@/lib/api/responses";
+﻿import { NextResponse } from "next/server";
+import { assertSameOrigin } from "@/lib/api/csrf";
+import { handleApiError, readJson, requireApiTenant } from "@/lib/api/responses";
+import { idParamSchema, projectReadmeSchema } from "@/lib/validation/schemas";
+import { toProjectDto } from "@/server/dto/project-dto";
+import { services } from "@/server/services";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_request: Request, _context: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireApiTenant();
-    return notImplementedError("Public README management");
+    assertSameOrigin(request);
+
+    const tenant = await requireApiTenant();
+    const { id } = await context.params;
+    const projectId = idParamSchema.parse(id);
+    const body = projectReadmeSchema.parse(await readJson(request));
+    const project = await services.projects.update(tenant, projectId, body);
+
+    return NextResponse.json({ data: toProjectDto(project) });
   } catch (error) {
     return handleApiError(error);
   }

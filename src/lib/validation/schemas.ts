@@ -19,7 +19,51 @@ const httpUrlSchema = z
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format");
 
+const timezoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Enter a valid IANA timezone");
+
 export const idParamSchema = z.string().min(1).max(64);
+
+export const createProjectSchema = z
+  .object({
+    userRepositoryId: idParamSchema,
+  })
+  .strict();
+
+export const projectReadmeSchema = z
+  .object({
+    publicReadmeMarkdown: z.string().max(100_000).nullable(),
+  })
+  .strict();
+
+export const authorEmailSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .email("Enter a valid email")
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+    verifiedByUser: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateAuthorEmailSchema = z
+  .object({
+    verifiedByUser: z.boolean(),
+  })
+  .strict();
 
 export const updateUserRepositorySchema = z
   .object({
@@ -84,7 +128,7 @@ export const updateProfileSchema = z
     profileSlug: slugSchema.optional(),
     profileVisibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
     searchIndexingEnabled: z.boolean().optional(),
-    timezone: z.string().trim().min(1).max(64).optional(),
+    timezone: timezoneSchema.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
@@ -97,7 +141,7 @@ export const onboardingSchema = z
     profileBio: z.string().trim().max(500).nullable().optional(),
     profileVisibility: z.enum(["PUBLIC", "PRIVATE"]).default("PRIVATE"),
     searchIndexingEnabled: z.boolean().optional(),
-    timezone: z.string().trim().min(1).max(64).optional(),
+    timezone: timezoneSchema.optional(),
   })
   .strict();
 

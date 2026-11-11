@@ -4,8 +4,9 @@ Multi-tenant GitHub project portfolio and development timeline.
 
 This repository currently implements **Milestone 1: Foundation and tenancy**,
 **Milestone 2: GitHub authentication and onboarding**, **Milestone 3:
-Repository discovery and selection**, and **Milestone 4: Historical commit
-backfill** from `PROJECT_SPEC_v2.md`.
+Repository discovery and selection**, **Milestone 4: Historical commit
+backfill**, and **Milestone 5: Project and profile management** from
+`PROJECT_SPEC_v2.md`.
 
 ## What is implemented
 
@@ -24,15 +25,21 @@ backfill** from `PROJECT_SPEC_v2.md`.
   matching by immutable GitHub user id or verified email, deduplication by
   repository and SHA, project date/activity recalculation and per-repository
   sync logs.
+- Project management with one private project per tracked repository, editable
+  status/title/description/slug/demo URL, project visibility, public overview
+  text for private repositories and shareable public URLs.
+- Profile settings with visibility, search indexing, timezone and verified
+  author email management.
 - Tenant-scoped service factories whose queries always include the authenticated
   user id.
 - Unit tests for tenancy/visibility/URL/auth, GitHub pagination and author
   matching, plus integration tests for repository discovery, resumable commit
-  sync and cross-tenant read/write denial against PostgreSQL.
+  sync, project/profile management, author emails and cross-tenant read/write
+  denial against PostgreSQL.
 - ESLint and Prettier configuration.
 
-Public profile data, project/profile editing, summaries, webhooks and scheduled
-sync are intentionally left for later milestones.
+Public profile rendering, summaries, webhooks and scheduled sync are
+intentionally left for later milestones.
 
 ## Requirements
 
@@ -202,6 +209,33 @@ disabled and the landing page shows setup guidance.
   is returned as `429 RATE_LIMITED`; GitHub `5xx` responses become
   `502 GITHUB_ERROR`. Errors are returned as safe JSON without exposing tokens.
 
+## Project and profile management
+
+- **Project creation:** every tracked repository gets exactly one project.
+  `POST /api/user/projects` ensures the project for a `userRepositoryId`;
+  `GET /api/user/projects` lists projects. New projects are private with
+  status `ONGOING`.
+- **Project editing:** `PATCH /api/user/projects/[id]` updates display title,
+  short description, status, visibility, demo URL and slug. Slugs are unique per
+  user and conflicts return `409 PROJECT_SLUG_CONFLICT`.
+- **Public overview:** `POST /api/user/projects/[id]/readme` stores
+  `publicReadmeMarkdown` and refreshes `publicReadmeUpdatedAt`. This is the only
+  repository text exposed publicly for private repositories.
+- **Public access:** a project can be public while the profile is private, but
+  public services still enforce profile visibility. Publish the profile in
+  Settings before sharing project URLs.
+- **Profile settings:** `PATCH /api/user/profile` updates display name, bio,
+  profile slug, visibility, search indexing and an IANA timezone. Profile slug
+  conflicts return `409 PROFILE_SLUG_CONFLICT`.
+- **Author emails:** `GET/POST /api/user/author-emails` and
+  `PATCH/DELETE /api/user/author-emails/[id]` manage verified email fallbacks
+  used during commit matching. Duplicate emails return
+  `409 AUTHOR_EMAIL_EXISTS`.
+- **Admin UI:** `/admin/projects` lists and creates missing projects,
+  `/admin/projects/[id]` edits project/public-display settings with a preview
+  and copyable URL, and `/admin/settings` manages profile privacy and author
+  emails.
+
 ## Commit sync
 
 - **Backfill:** `POST /api/user/repositories/[id]/sync` fetches commits from the
@@ -273,9 +307,9 @@ disabled and the landing page shows setup guidance.
 /dashboard                          Private dashboard (session required)
 /admin                              Private admin (session required)
 /admin/repositories                 Repository discovery and selection
-/admin/projects                     Project management scaffold
-/admin/projects/[id]                Project editor scaffold
-/admin/settings                     Profile/settings scaffold
+/admin/projects                     Project list and ensure projects
+/admin/projects/[id]                Project editor, preview and share URL
+/admin/settings                     Profile, privacy and author emails
 /api/health                         Database health check
 /api/auth/github/start              Start GitHub OAuth
 /api/auth/github/callback           GitHub OAuth callback
@@ -287,6 +321,11 @@ disabled and the landing page shows setup guidance.
 /api/user/repositories/[id]         Update one repository connection
 /api/user/repositories/[id]/sync    Backfill or incrementally sync commits
 /api/user/repositories/discover     Discover accessible GitHub repositories
+/api/user/projects                  List and create projects (GET/POST)
+/api/user/projects/[id]             Read or update a project (GET/PATCH)
+/api/user/projects/[id]/readme      Save the public overview (POST)
+/api/user/author-emails             List and add author emails (GET/POST)
+/api/user/author-emails/[id]        Update or remove an author email
 /api/user/...                       Other authenticated user APIs
 /api/admin/...                      Admin API scaffold
 /api/jobs/...                       Internal job endpoints (bearer secret)

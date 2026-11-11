@@ -1,4 +1,5 @@
 ﻿import { prisma } from "@/lib/db/prisma";
+import { createAuthorEmailService } from "@/server/services/author-email-service";
 import { createGitHubConnectionService } from "@/server/services/github-connection-service";
 import { createProjectService } from "@/server/services/project-service";
 import { createPublicProfileService } from "@/server/services/public-profile-service";
@@ -20,6 +21,7 @@ export const services = {
   projects: createProjectService(prisma),
   syncRuns: createSyncRunService(prisma),
   userProfile: createUserProfileService(prisma),
+  authorEmails: createAuthorEmailService(prisma),
   publicProfiles: createPublicProfileService(prisma),
   githubConnection: createGitHubConnectionService(prisma),
   repositoryDiscovery: createRepositoryDiscoveryService(prisma),

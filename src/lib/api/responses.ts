@@ -6,10 +6,16 @@ import { getSessionTenant } from "@/lib/auth/session";
 import { GitHubCommitError } from "@/lib/github/commits";
 import { GitHubRepositoryError } from "@/lib/github/repositories";
 import { TenantAccessDeniedError, type TenantContext } from "@/lib/tenancy/tenant-context";
+import { AuthorEmailExistsError } from "@/server/services/author-email-service";
+import {
+  ProjectNotTrackedError,
+  ProjectSlugConflictError,
+} from "@/server/services/project-service";
 import {
   RepositoryNotTrackedError,
   RepositorySyncInProgressError,
 } from "@/server/services/repository-sync-service";
+import { ProfileSlugConflictError } from "@/server/services/user-profile-service";
 
 export class UnauthenticatedError extends Error {
   readonly code = "UNAUTHENTICATED";
@@ -47,6 +53,10 @@ export type ApiErrorCode =
   | "GITHUB_ERROR"
   | "SYNC_IN_PROGRESS"
   | "REPOSITORY_NOT_TRACKED"
+  | "PROJECT_NOT_TRACKED"
+  | "PROJECT_SLUG_CONFLICT"
+  | "PROFILE_SLUG_CONFLICT"
+  | "AUTHOR_EMAIL_EXISTS"
   | "NOT_IMPLEMENTED"
   | "INTERNAL_ERROR";
 
@@ -140,6 +150,22 @@ export function handleApiError(error: unknown): NextResponse {
 
   if (error instanceof RepositoryNotTrackedError) {
     return apiError("REPOSITORY_NOT_TRACKED", error.message, 409);
+  }
+
+  if (error instanceof ProjectNotTrackedError) {
+    return apiError("PROJECT_NOT_TRACKED", error.message, 409);
+  }
+
+  if (error instanceof ProjectSlugConflictError) {
+    return apiError("PROJECT_SLUG_CONFLICT", error.message, 409);
+  }
+
+  if (error instanceof ProfileSlugConflictError) {
+    return apiError("PROFILE_SLUG_CONFLICT", error.message, 409);
+  }
+
+  if (error instanceof AuthorEmailExistsError) {
+    return apiError("AUTHOR_EMAIL_EXISTS", error.message, 409);
   }
 
   if (error instanceof GitHubRepositoryError) {
