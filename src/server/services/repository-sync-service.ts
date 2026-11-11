@@ -322,10 +322,7 @@ export function createRepositorySyncService(
         where: {
           id: connection.id,
           userId: tenant.userId,
-          OR: [
-            { syncStatus: { not: "RUNNING" } },
-            { updatedAt: { lt: staleBefore } },
-          ],
+          OR: [{ syncStatus: { not: "RUNNING" } }, { updatedAt: { lt: staleBefore } }],
         },
         data: {
           syncStatus: "RUNNING",
@@ -442,9 +439,7 @@ export function createRepositorySyncService(
               authorName: commit.commit.author.name,
               authorEmail: commit.commit.author.email ?? null,
               authorDate: new Date(commit.commit.author.date),
-              committerDate: new Date(
-                commit.commit.committer?.date ?? commit.commit.author.date,
-              ),
+              committerDate: new Date(commit.commit.committer?.date ?? commit.commit.author.date),
               message: commit.commit.message,
               htmlUrl: commit.html_url,
               authorMatchMethod,

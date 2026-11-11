@@ -237,7 +237,12 @@ export function RepositoryTable({ repositories }: RepositoryTableProps) {
                     </Link>
                     <button
                       className="text-left font-medium text-slate-900 underline disabled:text-slate-400 disabled:no-underline"
-                      disabled={isSaving || isSyncing || !row.trackingEnabled || row.syncStatus === "RUNNING"}
+                      disabled={
+                        isSaving ||
+                        isSyncing ||
+                        !row.trackingEnabled ||
+                        row.syncStatus === "RUNNING"
+                      }
                       onClick={() => syncRepository(row)}
                       title={
                         !row.trackingEnabled

@@ -134,29 +134,28 @@ export function createUserRepositoryService(db: AppPrismaClient) {
     },
 
     async metrics(tenant: TenantContext) {
-      const [commits, activeDays, projects, running, failed, backfilling] =
-        await db.$transaction([
-          db.commit.count({ where: { userId: tenant.userId } }),
-          db.dailyProjectActivity.findMany({
-            where: { userId: tenant.userId },
-            distinct: ["date"],
-            select: { date: true },
-          }),
-          db.project.count({ where: { userId: tenant.userId } }),
-          db.userRepository.count({
-            where: { userId: tenant.userId, trackingEnabled: true, syncStatus: "RUNNING" },
-          }),
-          db.userRepository.count({
-            where: { userId: tenant.userId, trackingEnabled: true, syncStatus: "FAILED" },
-          }),
-          db.userRepository.count({
-            where: {
-              userId: tenant.userId,
-              trackingEnabled: true,
-              backfillStatus: { in: ["NOT_STARTED", "QUEUED", "IN_PROGRESS", "PARTIAL"] },
-            },
-          }),
-        ]);
+      const [commits, activeDays, projects, running, failed, backfilling] = await db.$transaction([
+        db.commit.count({ where: { userId: tenant.userId } }),
+        db.dailyProjectActivity.findMany({
+          where: { userId: tenant.userId },
+          distinct: ["date"],
+          select: { date: true },
+        }),
+        db.project.count({ where: { userId: tenant.userId } }),
+        db.userRepository.count({
+          where: { userId: tenant.userId, trackingEnabled: true, syncStatus: "RUNNING" },
+        }),
+        db.userRepository.count({
+          where: { userId: tenant.userId, trackingEnabled: true, syncStatus: "FAILED" },
+        }),
+        db.userRepository.count({
+          where: {
+            userId: tenant.userId,
+            trackingEnabled: true,
+            backfillStatus: { in: ["NOT_STARTED", "QUEUED", "IN_PROGRESS", "PARTIAL"] },
+          },
+        }),
+      ]);
 
       return {
         commits,

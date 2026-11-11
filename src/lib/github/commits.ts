@@ -52,7 +52,13 @@ export type GitHubCommitListResult = {
 };
 
 export type GitHubCommitErrorCode =
-  "AUTH" | "RATE_LIMIT" | "UNAVAILABLE" | "INVALID_RESPONSE" | "NOT_FOUND" | "EMPTY" | "PAGINATION_LIMIT";
+  | "AUTH"
+  | "RATE_LIMIT"
+  | "UNAVAILABLE"
+  | "INVALID_RESPONSE"
+  | "NOT_FOUND"
+  | "EMPTY"
+  | "PAGINATION_LIMIT";
 
 export class GitHubCommitError extends Error {
   readonly code: GitHubCommitErrorCode;
@@ -186,9 +192,7 @@ function commitsUrl(
   return url.toString();
 }
 
-export function createGitHubCommitClient(
-  fetchImpl: GitHubCommitFetch = fetch,
-): GitHubCommitClient {
+export function createGitHubCommitClient(fetchImpl: GitHubCommitFetch = fetch): GitHubCommitClient {
   async function request(
     url: string,
     accessToken: string,

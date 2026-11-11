@@ -205,11 +205,7 @@ export function createGitHubRepositoryClient(
     return response;
   }
 
-  async function get(
-    accessToken: string,
-    owner: string,
-    name: string,
-  ): Promise<GitHubRepository> {
+  async function get(accessToken: string, owner: string, name: string): Promise<GitHubRepository> {
     const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
     const response = await request(url, accessToken, 0);
 

@@ -285,9 +285,9 @@ describe.skipIf(!hasTestDatabase)("repository sync", () => {
       lister([[commitFor("a", { authorId: 123 })]]),
     );
 
-    await expect(
-      service.sync(tenant, fixture.userRepository.id, "token"),
-    ).rejects.toBeInstanceOf(RepositoryNotTrackedError);
+    await expect(service.sync(tenant, fixture.userRepository.id, "token")).rejects.toBeInstanceOf(
+      RepositoryNotTrackedError,
+    );
   });
 
   it("treats an empty GitHub repository as a completed backfill", async () => {
@@ -322,9 +322,9 @@ describe.skipIf(!hasTestDatabase)("repository sync", () => {
       },
     });
 
-    await expect(
-      service.sync(tenant, fixture.userRepository.id, "token"),
-    ).rejects.toMatchObject({ code: "RATE_LIMIT" });
+    await expect(service.sync(tenant, fixture.userRepository.id, "token")).rejects.toMatchObject({
+      code: "RATE_LIMIT",
+    });
 
     const connection = await prisma.userRepository.findUniqueOrThrow({
       where: { id: fixture.userRepository.id },

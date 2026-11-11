@@ -82,9 +82,56 @@ export default async function DashboardPage() {
           Project cards, statuses and public/private state will be loaded through tenant-scoped
           services.
         </PlaceholderPanel>
-        <PlaceholderPanel title="Sync and backfill progress" milestone="Milestone 4">
-          Historical backfill, incremental sync health and safe error summaries will appear here.
-        </PlaceholderPanel>
+        <Card>
+          <h2 className="font-semibold text-slate-900">Sync and backfill</h2>
+          {activityMetrics.backfilling > 0 ? (
+            <p className="mt-2 text-sm text-amber-800">
+              {activityMetrics.backfilling} tracked{" "}
+              {activityMetrics.backfilling === 1 ? "repository is" : "repositories are"} still
+              backfilling. Timeline totals are incomplete until those runs finish.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">
+              All tracked repositories have completed their initial backfill.
+            </p>
+          )}
+          {activityMetrics.running > 0 ? (
+            <p className="mt-2 text-sm text-slate-600">
+              {activityMetrics.running} sync {activityMetrics.running === 1 ? "is" : "are"} running
+              now.
+            </p>
+          ) : null}
+          {activityMetrics.failed > 0 ? (
+            <p className="mt-2 text-sm text-red-700">
+              {activityMetrics.failed} tracked{" "}
+              {activityMetrics.failed === 1 ? "repository has" : "repositories have"} a failed sync.
+              Open repository sync for safe error details.
+            </p>
+          ) : null}
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Last repository sync</dt>
+              <dd className="text-right font-medium text-slate-900">
+                {lastSync ? formatDate(lastSync.finishedAt ?? lastSync.startedAt) : "Never"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Repository</dt>
+              <dd className="max-w-[60%] text-right font-medium text-slate-900">
+                {lastSync?.userRepository?.githubRepository.fullName ?? "—"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Status</dt>
+              <dd className="font-medium text-slate-900">{lastSync?.status ?? "—"}</dd>
+            </div>
+          </dl>
+          <div className="mt-4 text-sm">
+            <Link className="font-semibold text-slate-900 underline" href="/admin/repositories">
+              Review repository sync
+            </Link>
+          </div>
+        </Card>
         <PlaceholderPanel title="Activity timeline" milestone="Milestone 6">
           Deterministic daily aggregates and the accessible text/list alternative will appear here.
         </PlaceholderPanel>

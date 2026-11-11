@@ -26,11 +26,14 @@ export default async function AdminPage({
 }: Readonly<{ searchParams: Promise<{ github?: string }> }>) {
   const session = await requireOnboardedSessionUser();
   const tenant = createTenantContext(session.userId);
-  const [connection, counts, lastDiscovery] = await Promise.all([
-    services.githubConnection.get(tenant),
-    services.userRepositories.counts(tenant),
-    services.syncRuns.lastDiscovery(tenant),
-  ]);
+  const [connection, counts, activityMetrics, lastDiscovery, lastRepositorySync] =
+    await Promise.all([
+      services.githubConnection.get(tenant),
+      services.userRepositories.counts(tenant),
+      services.userRepositories.metrics(tenant),
+      services.syncRuns.lastDiscovery(tenant),
+      services.syncRuns.lastRepositorySync(tenant),
+    ]);
   const params = await searchParams;
   const githubNotice = params.github;
 
@@ -148,8 +151,48 @@ export default async function AdminPage({
         <Card>
           <h2 className="font-semibold text-slate-900">Sync health</h2>
           <p className="mt-2 text-sm text-slate-600">
-            Per-repository sync state, backfill progress and safe errors arrive in Milestone 4.
+            Tracked repositories can be backfilled from their default branch and synced again as new
+            commits arrive.
           </p>
+
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Backfilling or queued</dt>
+              <dd className="font-medium text-slate-900">{activityMetrics.backfilling}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Running now</dt>
+              <dd className="font-medium text-slate-900">{activityMetrics.running}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Failed syncs</dt>
+              <dd className="font-medium text-slate-900">{activityMetrics.failed}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Qualifying commits</dt>
+              <dd className="font-medium text-slate-900">{activityMetrics.commits}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Last repository sync</dt>
+              <dd className="text-right font-medium text-slate-900">
+                {lastRepositorySync
+                  ? formatDate(lastRepositorySync.finishedAt ?? lastRepositorySync.startedAt)
+                  : "Never"}
+              </dd>
+            </div>
+          </dl>
+
+          {lastRepositorySync?.status === "FAILED" && lastRepositorySync.errorMessage ? (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {lastRepositorySync.errorMessage}
+            </p>
+          ) : null}
+
+          <div className="mt-4 text-sm">
+            <Link className="font-semibold text-slate-900 underline" href="/admin/repositories">
+              Manage repository sync
+            </Link>
+          </div>
         </Card>
 
         <Card>

@@ -3,8 +3,9 @@
 Multi-tenant GitHub project portfolio and development timeline.
 
 This repository currently implements **Milestone 1: Foundation and tenancy**,
-**Milestone 2: GitHub authentication and onboarding**, and **Milestone 3:
-Repository discovery and selection** from `PROJECT_SPEC_v2.md`.
+**Milestone 2: GitHub authentication and onboarding**, **Milestone 3:
+Repository discovery and selection**, and **Milestone 4: Historical commit
+backfill** from `PROJECT_SPEC_v2.md`.
 
 ## What is implemented
 
@@ -19,14 +20,19 @@ Repository discovery and selection** from `PROJECT_SPEC_v2.md`.
 - Encrypted GitHub OAuth token storage and hashed server-side sessions.
 - GitHub repository discovery with `Link`-header pagination, rate-limit
   handling, idempotent upserts and per-user tracking/public-display selection.
+- Default-branch commit backfill with resumable page checkpoints, author
+  matching by immutable GitHub user id or verified email, deduplication by
+  repository and SHA, project date/activity recalculation and per-repository
+  sync logs.
 - Tenant-scoped service factories whose queries always include the authenticated
   user id.
-- Unit tests for tenancy/visibility/URL/auth helpers and integration tests that
-  attempt cross-tenant reads and writes against PostgreSQL.
+- Unit tests for tenancy/visibility/URL/auth, GitHub pagination and author
+  matching, plus integration tests for repository discovery, resumable commit
+  sync and cross-tenant read/write denial against PostgreSQL.
 - ESLint and Prettier configuration.
 
-Commit backfill, public profile data, summaries and webhooks are intentionally
-left for later milestones.
+Public profile data, project/profile editing, summaries, webhooks and scheduled
+sync are intentionally left for later milestones.
 
 ## Requirements
 
@@ -196,6 +202,31 @@ disabled and the landing page shows setup guidance.
   is returned as `429 RATE_LIMITED`; GitHub `5xx` responses become
   `502 GITHUB_ERROR`. Errors are returned as safe JSON without exposing tokens.
 
+## Commit sync
+
+- **Backfill:** `POST /api/user/repositories/[id]/sync` fetches commits from the
+  repository's current default branch. A repository must be tracked first.
+- **Author matching:** commits qualify when the GitHub author id matches the
+  connected user, or when the commit author email matches one of the user's
+  verified author emails. Display names are never used for matching.
+- **Deduplication:** commits are unique per `(userRepositoryId, sha)`; rerunning
+  sync does not duplicate rows.
+- **Resumable checkpoints:** each run processes a bounded number of pages and
+  stores the next page in `backfillCursor`. Repeating the request resumes the
+  backfill; `backfillStatus` becomes `COMPLETE` only after the last page.
+- **Incremental sync:** after backfill completes, `syncCursor` and
+  `lastSyncedAt` are set. Later runs request commits since the cursor with a
+  one-day overlap to catch boundary updates.
+- **Aggregates:** when a project exists, sync recalculates the project's first
+  and latest commit dates and affected `DailyProjectActivity` rows using the
+  user's timezone.
+- **Concurrency:** a per-connection lock rejects overlapping syncs with
+  `409 SYNC_IN_PROGRESS`. A stale `RUNNING` lock older than 15 minutes can be
+  superseded.
+- **Audit:** each sync writes a `SyncRun` with trigger, status, page/commit
+  counts and a safe error code and message. Previously imported commits are
+  retained when a repository becomes inaccessible.
+
 ## Useful commands
 
 | Command                | Purpose                                  |
@@ -254,6 +285,7 @@ disabled and the landing page shows setup guidance.
 /api/public/...                     Public API scaffolds
 /api/user/repositories              List/search and bulk-update repositories
 /api/user/repositories/[id]         Update one repository connection
+/api/user/repositories/[id]/sync    Backfill or incrementally sync commits
 /api/user/repositories/discover     Discover accessible GitHub repositories
 /api/user/...                       Other authenticated user APIs
 /api/admin/...                      Admin API scaffold

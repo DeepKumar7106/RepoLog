@@ -24,9 +24,7 @@ export function matchCommitAuthor(
 
   if (author.email) {
     const email = normalizeEmail(author.email);
-    const verified = user.verifiedEmails.some(
-      (candidate) => normalizeEmail(candidate) === email,
-    );
+    const verified = user.verifiedEmails.some((candidate) => normalizeEmail(candidate) === email);
 
     if (verified) {
       return "VERIFIED_EMAIL";
