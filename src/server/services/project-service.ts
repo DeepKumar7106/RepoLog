@@ -223,6 +223,10 @@ export function createProjectService(db: AppPrismaClient) {
         throw error;
       }
 
+      if (data.displayTitle !== undefined || data.visibility !== undefined) {
+        await db.dailySummary.deleteMany({ where: { userId: tenant.userId } });
+      }
+
       return get(tenant, id);
     },
   };

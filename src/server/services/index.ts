@@ -6,9 +6,11 @@ import { createProjectService } from "@/server/services/project-service";
 import { createPublicProfileService } from "@/server/services/public-profile-service";
 import { createRepositoryDiscoveryService } from "@/server/services/repository-discovery-service";
 import { createRepositorySyncService } from "@/server/services/repository-sync-service";
+import { createSummaryService } from "@/server/services/summary-service";
 import { createSyncRunService } from "@/server/services/sync-run-service";
 import { createUserProfileService } from "@/server/services/user-profile-service";
 import { createUserRepositoryService } from "@/server/services/user-repository-service";
+import { createUserSettingsService } from "@/server/services/user-settings-service";
 
 /**
  * Server-side service container.
@@ -23,6 +25,8 @@ export const services = {
   projects: createProjectService(prisma),
   syncRuns: createSyncRunService(prisma),
   userProfile: createUserProfileService(prisma),
+  userSettings: createUserSettingsService(prisma),
+  summaries: createSummaryService(prisma),
   authorEmails: createAuthorEmailService(prisma),
   publicProfiles: createPublicProfileService(prisma),
   githubConnection: createGitHubConnectionService(prisma),

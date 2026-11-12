@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ActivityDayDetails } from "@/components/activity/activity-day-details";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
+import { DailySummaryCard } from "@/components/activity/daily-summary-card";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { PlaceholderPanel } from "@/components/ui/placeholder-panel";
 import { requireOnboardedSessionUser } from "@/lib/auth/session";
 import { createTenantContext } from "@/lib/tenancy/tenant-context";
 import { dateParamSchema, publicActivityQuerySchema } from "@/lib/validation/schemas";
@@ -73,13 +73,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   await services.projects.ensureForTrackedRepositories(tenant);
 
-  const [connection, counts, activityMetrics, lastSync, projectRecords] = await Promise.all([
-    services.githubConnection.get(tenant),
-    services.userRepositories.counts(tenant),
-    services.userRepositories.metrics(tenant),
-    services.syncRuns.lastRepositorySync(tenant),
-    services.projects.list(tenant),
-  ]);
+  const [connection, counts, activityMetrics, lastSync, projectRecords, summarySettings] =
+    await Promise.all([
+      services.githubConnection.get(tenant),
+      services.userRepositories.counts(tenant),
+      services.userRepositories.metrics(tenant),
+      services.syncRuns.lastRepositorySync(tenant),
+      services.projects.list(tenant),
+      services.userSettings.get(tenant),
+    ]);
   const projects = projectRecords.map(toProjectDto);
   const activity =
     (await services.activity.summary(tenant, activityOptions)) ??
@@ -95,6 +97,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           projectSlug: activeProjectSlug,
         })
       : null;
+  const summary = selectedDate
+    ? await services.summaries.getDaySummary(tenant, selectedDate)
+    : null;
   const displayName = session.displayName ?? session.githubLogin;
   const metrics = [
     { label: "Tracked repositories", value: String(counts.tracked) },
@@ -285,15 +290,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               totalCommits={day.totalCommits}
             />
           ) : null}
+          {selectedDate ? (
+            <DailySummaryCard
+              canRegenerate={summarySettings.summariesEnabled}
+              date={selectedDate}
+              projects={projects.map((project) => ({
+                id: project.id,
+                displayTitle: project.displayTitle,
+                href: `/admin/projects/${project.id}`,
+              }))}
+              regenerateScope={summarySettings.allowPrivateMetadataForLlm ? "PRIVATE" : "PUBLIC"}
+              summary={summary}
+              timezone={activity.timezone}
+            />
+          ) : null}
         </div>
       ) : null}
-
-      <div className="mt-6">
-        <PlaceholderPanel title="Daily summaries" milestone="Milestone 7">
-          Optional LLM narratives will be stored per user and day without blocking the deterministic
-          metrics.
-        </PlaceholderPanel>
-      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from "@/lib/time/dates";
 
 export type PublicProjectCardDto = {
+  id: string;
   slug: string;
   displayTitle: string;
   shortDescription: string | null;
@@ -146,6 +147,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
               },
             },
             select: {
+              id: true,
               slug: true,
               displayTitle: true,
               shortDescription: true,
@@ -244,6 +246,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
           },
         },
         select: {
+          id: true,
           slug: true,
           displayTitle: true,
           shortDescription: true,
@@ -286,6 +289,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
       const canExposeRepository = repository.visibility === "PUBLIC";
 
       return {
+        id: record.id,
         slug: record.slug,
         displayTitle: record.displayTitle,
         shortDescription: record.shortDescription,

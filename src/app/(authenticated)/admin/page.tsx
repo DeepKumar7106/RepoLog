@@ -26,13 +26,14 @@ export default async function AdminPage({
 }: Readonly<{ searchParams: Promise<{ github?: string }> }>) {
   const session = await requireOnboardedSessionUser();
   const tenant = createTenantContext(session.userId);
-  const [connection, counts, activityMetrics, lastDiscovery, lastRepositorySync] =
+  const [connection, counts, activityMetrics, lastDiscovery, lastRepositorySync, summaryStatus] =
     await Promise.all([
       services.githubConnection.get(tenant),
       services.userRepositories.counts(tenant),
       services.userRepositories.metrics(tenant),
       services.syncRuns.lastDiscovery(tenant),
       services.syncRuns.lastRepositorySync(tenant),
+      services.summaries.summaryStatus(tenant),
     ]);
   const params = await searchParams;
   const githubNotice = params.github;
@@ -196,10 +197,52 @@ export default async function AdminPage({
         </Card>
 
         <Card>
-          <h2 className="font-semibold text-slate-900">Summary configuration</h2>
+          <h2 className="font-semibold text-slate-900">Daily summaries</h2>
           <p className="mt-2 text-sm text-slate-600">
-            Optional summary providers, privacy opt-ins and regeneration arrive in Milestone 7.
+            Optional narratives are generated after each local day ends. Activity metrics remain
+            deterministic and available even when summaries are disabled.
           </p>
+
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Status</dt>
+              <dd className="font-medium text-slate-900">
+                {summaryStatus.enabled ? "Enabled" : "Disabled"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Private metadata opt-in</dt>
+              <dd className="font-medium text-slate-900">
+                {summaryStatus.allowPrivateMetadataForLlm ? "Allowed" : "Not allowed"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Provider</dt>
+              <dd className="text-right font-medium text-slate-900">
+                {summaryStatus.provider || "Not configured"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Succeeded / failed</dt>
+              <dd className="font-medium text-slate-900">
+                {summaryStatus.counts.succeeded} / {summaryStatus.counts.failed}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Last generated</dt>
+              <dd className="text-right font-medium text-slate-900">
+                {summaryStatus.latestGeneratedAt
+                  ? formatDate(new Date(summaryStatus.latestGeneratedAt))
+                  : "Never"}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-4 text-sm">
+            <Link className="font-semibold text-slate-900 underline" href="/admin/settings">
+              Configure summaries
+            </Link>
+          </div>
         </Card>
       </div>
 

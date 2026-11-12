@@ -179,6 +179,15 @@ export function createUserRepositoryService(db: AppPrismaClient) {
         data,
       });
 
+      if (
+        result.count > 0 &&
+        (data.publicDisplayEnabled !== undefined ||
+          data.publicActivityDetail !== undefined ||
+          data.trackingEnabled !== undefined)
+      ) {
+        await db.dailySummary.deleteMany({ where: { userId: tenant.userId } });
+      }
+
       return result.count;
     },
 
@@ -190,6 +199,14 @@ export function createUserRepositoryService(db: AppPrismaClient) {
 
       if (result.count === 0) {
         throw new TenantAccessDeniedError();
+      }
+
+      if (
+        data.publicDisplayEnabled !== undefined ||
+        data.publicActivityDetail !== undefined ||
+        data.trackingEnabled !== undefined
+      ) {
+        await db.dailySummary.deleteMany({ where: { userId: tenant.userId } });
       }
 
       return get(tenant, id);

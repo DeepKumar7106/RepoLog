@@ -96,15 +96,36 @@ export function createRepositoryDiscoveryService(
       lastMetadataRefreshAt: now,
     };
 
-    return db.gitHubRepository.upsert({
-      where: { githubRepositoryId: String(repository.id) },
+    const githubRepositoryId = String(repository.id);
+    const existing = await db.gitHubRepository.findUnique({
+      where: { githubRepositoryId },
+      select: { id: true, visibility: true },
+    });
+    const saved = await db.gitHubRepository.upsert({
+      where: { githubRepositoryId },
       update: metadata,
       create: {
-        githubRepositoryId: String(repository.id),
+        githubRepositoryId,
         ...metadata,
       },
       select: { id: true },
     });
+
+    if (existing && existing.visibility !== metadata.visibility) {
+      const users = await db.userRepository.findMany({
+        where: { githubRepositoryId: saved.id },
+        select: { userId: true },
+        distinct: ["userId"],
+      });
+
+      if (users.length > 0) {
+        await db.dailySummary.deleteMany({
+          where: { userId: { in: users.map((user) => user.userId) } },
+        });
+      }
+    }
+
+    return saved;
   }
 
   return {

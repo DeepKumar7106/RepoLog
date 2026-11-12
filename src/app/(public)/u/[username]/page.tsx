@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityDayDetails } from "@/components/activity/activity-day-details";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
+import { DailySummaryCard } from "@/components/activity/daily-summary-card";
 import { CopyLinkButton } from "@/components/public/copy-link-button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -122,6 +123,9 @@ export default async function PublicProfilePage({ params, searchParams }: PagePr
     notFound();
   }
 
+  const summary = selectedDate
+    ? await services.summaries.getPublicDaySummary(profile.profileSlug, selectedDate)
+    : null;
   const profileUrl = absolutePublicUrl(publicProfilePath(profile.profileSlug), env.APP_BASE_URL);
   const description =
     profile.profileBio ?? `Projects and development activity from @${profile.profileSlug}.`;
@@ -209,6 +213,19 @@ export default async function PublicProfilePage({ params, searchParams }: PagePr
           projects={day.projects}
           timezone={day.timezone}
           totalCommits={day.totalCommits}
+        />
+      ) : null}
+
+      {selectedDate && summary ? (
+        <DailySummaryCard
+          date={selectedDate}
+          projects={profile.projects.map((project) => ({
+            id: project.id,
+            displayTitle: project.displayTitle,
+            href: publicProjectPath(profile.profileSlug, project.slug),
+          }))}
+          summary={summary}
+          timezone={activity.timezone}
         />
       ) : null}
     </div>

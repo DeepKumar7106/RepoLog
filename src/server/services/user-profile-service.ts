@@ -85,6 +85,10 @@ export function createUserProfileService(db: AppPrismaClient) {
         throw error;
       }
 
+      if (data.profileVisibility !== undefined || data.timezone !== undefined) {
+        await db.dailySummary.deleteMany({ where: { userId: tenant.userId } });
+      }
+
       return get(tenant);
     },
 

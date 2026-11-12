@@ -5,8 +5,9 @@ Multi-tenant GitHub project portfolio and development timeline.
 This repository currently implements **Milestone 1: Foundation and tenancy**,
 **Milestone 2: GitHub authentication and onboarding**, **Milestone 3:
 Repository discovery and selection**, **Milestone 4: Historical commit
-backfill**, **Milestone 5: Project and profile management**, and **Milestone 6:
-Public profiles and activity** from `PROJECT_SPEC_v2.md`.
+backfill**, **Milestone 5: Project and profile management**, **Milestone 6:
+Public profiles and activity**, and **Milestone 7: Daily summaries** from
+`PROJECT_SPEC_v2.md`.
 
 ## What is implemented
 
@@ -38,16 +39,19 @@ Public profiles and activity** from `PROJECT_SPEC_v2.md`.
 - Public activity privacy rules: private profiles are unreachable, private
   projects are omitted, private repositories expose only aggregate counts, and
   commit messages/SHAs require `COMMIT_DETAILS` on a public repository.
+- Optional daily summaries with deterministic activity input, a provider
+  interface (`mock`/`openai`), Zod-validated output, per-user/timezone/scope
+  caching, privacy opt-ins, regeneration and public-safe display.
 - Tenant-scoped service factories whose queries always include the authenticated
   user id.
-- Unit tests for tenancy/visibility/URL/auth, GitHub pagination and author
-  matching, plus integration tests for repository discovery, resumable commit
-  sync, project/profile management, author emails, public profile/activity
-  privacy and cross-tenant read/write denial against PostgreSQL.
+- Unit tests for tenancy/visibility/URL/auth, GitHub pagination, author
+  matching and summary output validation, plus integration tests for repository
+  discovery, resumable commit sync, project/profile management, author emails,
+  public profile/activity privacy, daily summary privacy/caching and
+  cross-tenant read/write denial against PostgreSQL.
 - ESLint and Prettier configuration.
 
-Daily summaries, webhooks and scheduled sync are intentionally left for later
-milestones.
+Webhooks and scheduled sync are intentionally left for later milestones.
 
 ## Requirements
 
@@ -241,8 +245,8 @@ disabled and the landing page shows setup guidance.
   `409 AUTHOR_EMAIL_EXISTS`.
 - **Admin UI:** `/admin/projects` lists and creates missing projects,
   `/admin/projects/[id]` edits project/public-display settings with a preview
-  and copyable URL, and `/admin/settings` manages profile privacy and author
-  emails.
+  and copyable URL, and `/admin/settings` manages profile privacy, daily summary
+  preferences and author emails.
 
 ## Public profiles and activity
 
@@ -265,6 +269,37 @@ disabled and the landing page shows setup guidance.
   project/date filters, daily details, share links and social metadata.
 - **Dashboard:** `/dashboard` shows the authenticated user's project overview
   and personal timeline, including private activity.
+
+## Daily summaries
+
+- **Deterministic input:** summaries are built from stored `DailyProjectActivity`
+  rows and qualifying commit messages. The application, not the model, owns all
+  counts, dates and totals.
+- **Scopes:** `PUBLIC` summaries include only public-safe projects and commit
+  messages. `PRIVATE` summaries include private metadata only when the user
+  enables `allowPrivateMetadataForLlm`; otherwise they are not generated.
+- **Providers:** `SUMMARY_PROVIDER=mock` produces deterministic local summaries;
+  `openai` uses `SUMMARY_PROVIDER_API_KEY` and an optional `SUMMARY_MODEL`
+  (default `gpt-4o-mini`). Per-user provider/model overrides are available in
+  Settings. Missing provider configuration skips generation without affecting
+  activity data.
+- **Validation and caching:** provider output is validated with Zod, project ids
+  are checked against the input, and results are cached by
+  `(userId, date, timezone, scope, inputHash)`. A matching successful summary is
+  reused without another provider call.
+- **Generation timing:** `POST /api/jobs/generate-daily-summaries` requires
+  `JOB_SECRET` and processes yesterday in each user's timezone. Generation is
+  skipped for the current local day, users with summaries disabled and
+  repositories with incomplete sync/backfill.
+- **Privacy:** changing profile visibility, timezone, project visibility/title,
+  repository public-display/detail settings or a discovered repository's GitHub
+  visibility invalidates stored summaries. Public profile summaries are returned
+  only for a public profile with summaries enabled.
+- **Regeneration:** `POST /api/user/summaries/[date]/regenerate?scope=PUBLIC`
+  (or `PRIVATE`) regenerates one day for the authenticated user.
+- **Display:** the private dashboard and public profile show a saved daily
+  summary beneath the activity chart when a day is selected. Public pages never
+  show private summaries.
 
 ## Commit sync
 
@@ -339,7 +374,7 @@ disabled and the landing page shows setup guidance.
 /admin/repositories                 Repository discovery and selection
 /admin/projects                     Project list and ensure projects
 /admin/projects/[id]                Project editor, preview and share URL
-/admin/settings                     Profile, privacy and author emails
+/admin/settings                     Profile, privacy, summaries and author emails
 /api/health                         Database health check
 /api/auth/github/start              Start GitHub OAuth
 /api/auth/github/callback           GitHub OAuth callback
@@ -362,9 +397,12 @@ disabled and the landing page shows setup guidance.
 /api/user/projects/[id]/readme      Save the public overview (POST)
 /api/user/author-emails             List and add author emails (GET/POST)
 /api/user/author-emails/[id]        Update or remove an author email
+/api/user/settings                  Read or update summary preferences (GET/PATCH)
+/api/user/summaries/[date]/regenerate Regenerate a daily summary (POST)
 /api/user/...                       Other authenticated user APIs
 /api/admin/...                      Admin API scaffold
-/api/jobs/...                       Internal job endpoints (bearer secret)
+/api/jobs/generate-daily-summaries  Generate yesterday's summaries (bearer secret)
+/api/jobs/...                       Other internal job endpoints (bearer secret)
 /api/webhooks/github                Webhook scaffold
 ```
 
