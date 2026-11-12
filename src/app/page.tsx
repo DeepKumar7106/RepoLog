@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { isGitHubAuthConfigured } from "@/lib/auth/github";
+import { publicProfilePath } from "@/lib/urls/public-urls";
+import { services } from "@/server/services";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ export default async function MarketingPage({
   const params = await searchParams;
   const configured = isGitHubAuthConfigured();
   const message = authMessage(params.auth, params.reason);
+  const featuredProfile = await services.publicProfiles.findFeaturedProfile();
 
   return (
     <div className="space-y-10">
@@ -121,6 +124,25 @@ export default async function MarketingPage({
         </Card>
       </section>
 
+      {featuredProfile ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <p className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+            Featured public profile
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-lg font-semibold text-slate-900">
+              {featuredProfile.displayName ?? featuredProfile.githubLogin}
+            </p>
+            <Link
+              className="text-sm font-semibold text-slate-900 underline"
+              href={publicProfilePath(featuredProfile.profileSlug)}
+            >
+              @{featuredProfile.profileSlug}
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid gap-4 sm:grid-cols-3">
         <Card>
           <h2 className="font-semibold text-slate-900">GitHub stays the source of truth</h2>
@@ -146,11 +168,11 @@ export default async function MarketingPage({
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-xl font-semibold text-slate-900">Milestone 3: Repository discovery</h2>
+        <h2 className="text-xl font-semibold text-slate-900">Milestone 6: Public portfolio</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Sign in with GitHub, discover accessible personal and organization repositories, and
-          choose which ones to track. Repository discovery is tenant-scoped, paginated and
-          idempotent; commit backfill arrives in the next milestone.
+          Publish a privacy-aware profile and project pages with activity charts, daily commit
+          details, share links and social metadata. Private repositories never expose commit
+          details, even when aggregate activity is public.
         </p>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
           <Link className="font-medium text-slate-900 underline" href="/dashboard">

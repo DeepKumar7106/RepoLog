@@ -5,8 +5,8 @@ Multi-tenant GitHub project portfolio and development timeline.
 This repository currently implements **Milestone 1: Foundation and tenancy**,
 **Milestone 2: GitHub authentication and onboarding**, **Milestone 3:
 Repository discovery and selection**, **Milestone 4: Historical commit
-backfill**, and **Milestone 5: Project and profile management** from
-`PROJECT_SPEC_v2.md`.
+backfill**, **Milestone 5: Project and profile management**, and **Milestone 6:
+Public profiles and activity** from `PROJECT_SPEC_v2.md`.
 
 ## What is implemented
 
@@ -30,16 +30,24 @@ backfill**, and **Milestone 5: Project and profile management** from
   text for private repositories and shareable public URLs.
 - Profile settings with visibility, search indexing, timezone and verified
   author email management.
+- Public profile and project pages with privacy-aware project cards, activity
+  charts, date/project filters, daily commit lists, copyable share links and
+  Open Graph/Twitter metadata. Generated OG images are available at `/api/og`.
+- Dashboard project overview and personal activity timeline backed by the same
+  deterministic daily aggregates.
+- Public activity privacy rules: private profiles are unreachable, private
+  projects are omitted, private repositories expose only aggregate counts, and
+  commit messages/SHAs require `COMMIT_DETAILS` on a public repository.
 - Tenant-scoped service factories whose queries always include the authenticated
   user id.
 - Unit tests for tenancy/visibility/URL/auth, GitHub pagination and author
   matching, plus integration tests for repository discovery, resumable commit
-  sync, project/profile management, author emails and cross-tenant read/write
-  denial against PostgreSQL.
+  sync, project/profile management, author emails, public profile/activity
+  privacy and cross-tenant read/write denial against PostgreSQL.
 - ESLint and Prettier configuration.
 
-Public profile rendering, summaries, webhooks and scheduled sync are
-intentionally left for later milestones.
+Daily summaries, webhooks and scheduled sync are intentionally left for later
+milestones.
 
 ## Requirements
 
@@ -236,6 +244,28 @@ disabled and the landing page shows setup guidance.
   and copyable URL, and `/admin/settings` manages profile privacy and author
   emails.
 
+## Public profiles and activity
+
+- **Public profile:** `GET /api/public/users/[username]` returns an allowlisted
+  profile and its public projects. Private profiles return `404`.
+- **Public project:** `GET /api/public/users/[username]/projects/[slug]` returns
+  approved project fields, published README Markdown and repository metadata only
+  when the GitHub repository is public.
+- **Activity:** `GET /api/public/users/[username]/activity` accepts `from`, `to`
+  and `project` query parameters. Ranges default to 90 days and are limited to
+  366 days. `GET /api/public/users/[username]/days/[date]` returns the selected
+  day's project aggregates and any permitted commit details.
+- **Privacy:** public project access requires a public profile, project
+  visibility `PUBLIC` and `publicDisplayEnabled`. Activity respects
+  `publicActivityDetail`: `HIDDEN` omits the project, `AGGREGATED` exposes counts
+  only, and `COMMIT_DETAILS` exposes commit metadata only for public GitHub
+  repositories.
+- **Pages:** `/u/[username]` and `/u/[username]/projects/[projectSlug]` render
+  the public portfolio with an activity chart, accessible active-day list,
+  project/date filters, daily details, share links and social metadata.
+- **Dashboard:** `/dashboard` shows the authenticated user's project overview
+  and personal timeline, including private activity.
+
 ## Commit sync
 
 - **Backfill:** `POST /api/user/repositories/[id]/sync` fetches commits from the
@@ -302,9 +332,9 @@ disabled and the landing page shows setup guidance.
 ```text
 /                                   Marketing/landing page with GitHub sign-in
 /onboarding                         First-run profile/privacy onboarding
-/u/[username]                       Public profile scaffold
-/u/[username]/projects/[projectSlug] Public project scaffold
-/dashboard                          Private dashboard (session required)
+/u/[username]                       Public profile and activity timeline
+/u/[username]/projects/[projectSlug] Public project detail and activity
+/dashboard                          Private dashboard, projects and timeline
 /admin                              Private admin (session required)
 /admin/repositories                 Repository discovery and selection
 /admin/projects                     Project list and ensure projects
@@ -316,7 +346,13 @@ disabled and the landing page shows setup guidance.
 /api/auth/github/disconnect         Disconnect GitHub (POST)
 /api/auth/signout                   Sign out (POST)
 /api/onboarding                     Complete first-run onboarding (POST)
-/api/public/...                     Public API scaffolds
+/api/public/users/[username]        Public profile and public projects
+/api/public/users/[username]/projects/[slug] Public project detail
+/api/public/users/[username]/activity Public activity range
+/api/public/users/[username]/days/[date] Public daily activity and commits
+/api/og                             Generated social preview image
+/robots.txt                         Crawler rules for private routes
+/sitemap.xml                        Indexable public profiles and projects
 /api/user/repositories              List/search and bulk-update repositories
 /api/user/repositories/[id]         Update one repository connection
 /api/user/repositories/[id]/sync    Backfill or incrementally sync commits

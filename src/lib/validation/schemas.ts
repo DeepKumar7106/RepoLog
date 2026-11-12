@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isDateKey } from "@/lib/time/dates";
 
 export const slugSchema = z
   .string()
@@ -17,7 +18,10 @@ const httpUrlSchema = z
     "Only http and https URLs are allowed",
   );
 
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format");
+const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use the YYYY-MM-DD format")
+  .refine(isDateKey, "Enter a valid calendar date");
 
 const timezoneSchema = z
   .string()
@@ -158,10 +162,23 @@ export const updateSettingsSchema = z
     message: "At least one field is required",
   });
 
-export const publicActivityQuerySchema = z.object({
-  from: isoDateSchema.optional(),
-  to: isoDateSchema.optional(),
-  project: slugSchema.optional(),
-});
-
 export const dateParamSchema = isoDateSchema;
+
+export const publicActivityQuerySchema = z
+  .object({
+    from: dateParamSchema.optional(),
+    to: dateParamSchema.optional(),
+    project: slugSchema.optional(),
+  })
+  .strict()
+  .refine((value) => !value.from || !value.to || value.from <= value.to, {
+    message: "The from date must be before or equal to the to date",
+    path: ["from"],
+  })
+  .refine(
+    (value) =>
+      !value.from ||
+      !value.to ||
+      Date.parse(value.to) - Date.parse(value.from) <= 366 * 24 * 60 * 60 * 1000,
+    { message: "Activity ranges are limited to 366 days", path: ["to"] },
+  );
