@@ -82,6 +82,14 @@ enum SyncRunStatus {
   PARTIAL
 }
 
+enum WebhookDeliveryStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
 enum SummaryScope {
   PRIVATE
   PUBLIC
@@ -365,6 +373,10 @@ model SyncRun {
   pagesProcessed    Int           @default(0)
   commitsProcessed  Int           @default(0)
   commitsInserted   Int           @default(0)
+  attempts          Int           @default(0)
+  availableAt       DateTime      @default(now())
+  lockedAt          DateTime?
+  dedupeKey         String?       @unique
   errorCode         String?
   errorMessage      String?
   createdAt         DateTime      @default(now())
@@ -376,6 +388,26 @@ model SyncRun {
   @@index([userId, createdAt])
   @@index([userRepositoryId, startedAt])
   @@index([userId, status])
+  @@index([status, availableAt])
+}
+
+model GitHubWebhookDelivery {
+  id                 String                @id @default(cuid())
+  deliveryId         String                @unique
+  event              String
+  action             String?
+  repositoryGithubId String?
+  status             WebhookDeliveryStatus @default(RECEIVED)
+  attempts           Int                   @default(0)
+  errorCode          String?
+  errorMessage       String?
+  receivedAt         DateTime              @default(now())
+  processedAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([status, createdAt])
+  @@index([repositoryGithubId])
 }
 
 model AuthorEmail {

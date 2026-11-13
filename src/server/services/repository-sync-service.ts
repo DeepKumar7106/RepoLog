@@ -36,6 +36,7 @@ export class RepositoryNotTrackedError extends Error {
 
 export type RepositorySyncOptions = {
   trigger?: SyncTrigger;
+  syncRunId?: string;
   maxPages?: number;
   perPage?: number;
   now?: Date;
@@ -334,29 +335,64 @@ export function createRepositorySyncService(
         throw new RepositorySyncInProgressError();
       }
 
+      let run: { id: string; trigger: SyncTrigger };
+
+      if (options.syncRunId) {
+        const existingRun = await db.syncRun.findFirst({
+          where: {
+            id: options.syncRunId,
+            userId: tenant.userId,
+            userRepositoryId: connection.id,
+          },
+          select: { id: true, trigger: true },
+        });
+
+        if (!existingRun) {
+          throw new TenantAccessDeniedError();
+        }
+
+        run = existingRun;
+      } else {
+        const trigger =
+          options.trigger ??
+          (isBackfill && connection.backfillStatus === "NOT_STARTED" ? "INITIAL" : "ADMIN");
+
+        run = await db.syncRun.create({
+          data: {
+            userId: tenant.userId,
+            userRepositoryId: connection.id,
+            trigger,
+            status: "RUNNING",
+          },
+          select: { id: true, trigger: true },
+        });
+      }
+
       await db.syncRun.updateMany({
         where: {
           userId: tenant.userId,
           userRepositoryId: connection.id,
           status: "RUNNING",
+          id: { not: run.id },
         },
         data: {
           status: "FAILED",
           finishedAt: now,
           errorCode: "STALE_SYNC",
           errorMessage: "Superseded by a newer sync run",
+          lockedAt: null,
         },
       });
 
-      const trigger =
-        options.trigger ??
-        (isBackfill && connection.backfillStatus === "NOT_STARTED" ? "INITIAL" : "ADMIN");
-      const run = await db.syncRun.create({
+      await db.syncRun.update({
+        where: { id: run.id },
         data: {
-          userId: tenant.userId,
-          userRepositoryId: connection.id,
-          trigger,
           status: "RUNNING",
+          startedAt: now,
+          lockedAt: now,
+          finishedAt: null,
+          errorCode: null,
+          errorMessage: null,
         },
       });
 
@@ -506,6 +542,7 @@ export function createRepositorySyncService(
           data: {
             status: hasMore ? "PARTIAL" : "SUCCEEDED",
             finishedAt: new Date(),
+            lockedAt: null,
             pagesProcessed,
             commitsProcessed,
             commitsInserted,
@@ -550,6 +587,7 @@ export function createRepositorySyncService(
             data: {
               status: "FAILED",
               finishedAt: new Date(),
+              lockedAt: null,
               pagesProcessed,
               commitsProcessed,
               commitsInserted,

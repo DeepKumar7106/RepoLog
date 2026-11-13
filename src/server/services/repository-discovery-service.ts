@@ -1,4 +1,6 @@
 import { Prisma, type OwnerType, type RepositoryVisibility } from "@/generated/prisma/client";
+import type { SyncTrigger } from "@/generated/prisma/enums";
+import { GITHUB_PROVIDER } from "@/lib/auth/constants";
 import type { AppPrismaClient } from "@/lib/db/prisma-factory";
 import {
   createGitHubRepositoryClient,
@@ -15,6 +17,13 @@ export type RepositoryDiscoveryResult = {
   pages: number;
   lastDiscoveredAt: string;
 };
+
+export type RepositoryDiscoveryOptions = {
+  trigger?: SyncTrigger;
+  now?: Date;
+};
+
+const HOUR_MS = 60 * 60 * 1000;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -129,13 +138,82 @@ export function createRepositoryDiscoveryService(
   }
 
   return {
-    async discover(tenant: TenantContext, accessToken: string): Promise<RepositoryDiscoveryResult> {
-      const now = new Date();
+    async refreshMetadata(repository: GitHubRepository, now = new Date()) {
+      return upsertRepository(repository, now);
+    },
+
+    async listDueUsers(
+      input: { now?: Date; intervalHours?: number; limit?: number } = {},
+    ): Promise<Array<{ userId: string; lastDiscoveredAt: Date | null }>> {
+      const now = input.now ?? new Date();
+      const intervalHours = Math.max(input.intervalHours ?? 24, 1);
+      const limit = Math.min(Math.max(Math.floor(input.limit ?? 50), 1), 200);
+      const cutoff = new Date(now.getTime() - intervalHours * HOUR_MS);
+      const users = await db.user.findMany({
+        where: {
+          onboardingCompletedAt: { not: null },
+          accounts: {
+            some: {
+              provider: GITHUB_PROVIDER,
+              disconnectedAt: null,
+              access_token: { not: null },
+            },
+          },
+          OR: [
+            {
+              syncRuns: {
+                none: {
+                  userRepositoryId: null,
+                  status: { in: ["SUCCEEDED", "PARTIAL"] },
+                },
+              },
+            },
+            {
+              syncRuns: {
+                none: {
+                  userRepositoryId: null,
+                  status: { in: ["SUCCEEDED", "PARTIAL"] },
+                  startedAt: { gte: cutoff },
+                },
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          syncRuns: {
+            where: {
+              userRepositoryId: null,
+              status: { in: ["SUCCEEDED", "PARTIAL"] },
+            },
+            orderBy: { startedAt: "desc" },
+            take: 1,
+            select: { startedAt: true },
+          },
+        },
+        orderBy: { id: "asc" },
+        take: limit,
+      });
+
+      return users.map((user) => ({
+        userId: user.id,
+        lastDiscoveredAt: user.syncRuns[0]?.startedAt ?? null,
+      }));
+    },
+
+    async discover(
+      tenant: TenantContext,
+      accessToken: string,
+      options: RepositoryDiscoveryOptions = {},
+    ): Promise<RepositoryDiscoveryResult> {
+      const now = options.now ?? new Date();
       const run = await db.syncRun.create({
         data: {
           userId: tenant.userId,
-          trigger: "ADMIN",
+          trigger: options.trigger ?? "ADMIN",
           status: "RUNNING",
+          startedAt: now,
+          lockedAt: now,
         },
       });
 
@@ -180,6 +258,7 @@ export function createRepositoryDiscoveryService(
           data: {
             status: "SUCCEEDED",
             finishedAt: new Date(),
+            lockedAt: null,
             pagesProcessed: pages,
           },
         });
@@ -201,6 +280,7 @@ export function createRepositoryDiscoveryService(
             data: {
               status: "FAILED",
               finishedAt: new Date(),
+              lockedAt: null,
               pagesProcessed,
               errorCode: discoveryErrorCode(error),
               errorMessage: discoveryErrorMessage(error),

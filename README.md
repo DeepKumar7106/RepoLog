@@ -6,7 +6,8 @@ This repository currently implements **Milestone 1: Foundation and tenancy**,
 **Milestone 2: GitHub authentication and onboarding**, **Milestone 3:
 Repository discovery and selection**, **Milestone 4: Historical commit
 backfill**, **Milestone 5: Project and profile management**, **Milestone 6:
-Public profiles and activity**, and **Milestone 7: Daily summaries** from
+Public profiles and activity**, **Milestone 7: Daily summaries**, and
+**Milestone 8: Webhooks, scheduled sync and hardening** from
 `PROJECT_SPEC_v2.md`.
 
 ## What is implemented
@@ -14,8 +15,8 @@ Public profiles and activity**, and **Milestone 7: Daily summaries** from
 - Next.js App Router, TypeScript strict mode and Tailwind CSS.
 - PostgreSQL + Prisma with a user-scoped multi-tenant schema.
 - Migrations for users, GitHub repositories, user repository connections,
-  projects, commits, daily activity, daily summaries, sync runs, author emails
-  and user settings.
+  projects, commits, daily activity, daily summaries, queued sync runs, webhook
+  deliveries, author emails and user settings.
 - Zod environment validation and `.env.example`.
 - GitHub OAuth 2.0 sign-in with PKCE, first-run onboarding, protected
   dashboard/admin routes and GitHub disconnect/reconnect.
@@ -42,16 +43,21 @@ Public profiles and activity**, and **Milestone 7: Daily summaries** from
 - Optional daily summaries with deterministic activity input, a provider
   interface (`mock`/`openai`), Zod-validated output, per-user/timezone/scope
   caching, privacy opt-ins, regeneration and public-safe display.
+- Verified GitHub webhooks with HMAC-SHA256 signature checks, delivery
+  idempotency, default-branch filtering and per-connection sync enqueueing.
+- Scheduled per-user repository discovery and incremental sync with a durable
+  `SyncRun` queue, fair per-user ordering, bounded worker batches, exponential
+  backoff with jitter, GitHub rate-limit `retry-after` support and stale-lock
+  recovery.
 - Tenant-scoped service factories whose queries always include the authenticated
   user id.
-- Unit tests for tenancy/visibility/URL/auth, GitHub pagination, author
-  matching and summary output validation, plus integration tests for repository
-  discovery, resumable commit sync, project/profile management, author emails,
-  public profile/activity privacy, daily summary privacy/caching and
-  cross-tenant read/write denial against PostgreSQL.
+- Unit tests for tenancy/visibility/URL/auth, GitHub pagination, webhook
+  signatures, author matching and summary output validation, plus integration
+  tests for repository discovery, resumable commit sync, webhook idempotency,
+  queue retries/backoff, scheduled enqueueing, project/profile management,
+  author emails, public profile/activity privacy, daily summary
+  privacy/caching and cross-tenant read/write denial against PostgreSQL.
 - ESLint and Prettier configuration.
-
-Webhooks and scheduled sync are intentionally left for later milestones.
 
 ## Requirements
 
@@ -301,6 +307,93 @@ disabled and the landing page shows setup guidance.
   summary beneath the activity chart when a day is selected. Public pages never
   show private summaries.
 
+## Webhooks and scheduled sync
+
+- **Webhook endpoint:** `POST /api/webhooks/github` accepts GitHub repository
+  webhook deliveries. Configure the webhook payload URL as
+  `${APP_BASE_URL}/api/webhooks/github`, content type `application/json`, and
+  the same secret as `GITHUB_WEBHOOK_SECRET`. Enable at least the **Pushes** and
+  **Repository** events. The endpoint returns `503` until the secret is set.
+- **Signature verification:** every delivery must include a valid
+  `X-Hub-Signature-256` HMAC-SHA256 signature. Invalid or missing signatures are
+  rejected before the payload is processed.
+- **Idempotency:** `GitHubWebhookDelivery` records the `X-GitHub-Delivery` id.
+  Duplicate deliveries return success without creating duplicate sync jobs.
+  Failed deliveries can be retried by GitHub with the same id.
+- **Trigger semantics:** webhook payloads are triggers, not the source of truth.
+  A default-branch push enqueues a sync for each tracked connection to that
+  repository; the worker then fetches canonical commit data from GitHub. Pushes
+  to other branches are ignored. `repository` events refresh shared metadata for
+  renamed, transferred, archived, public/private and deleted repositories.
+- **Durable queue:** sync work is stored in `SyncRun` rows with `PENDING`,
+  `availableAt`, `lockedAt`, `attempts` and `dedupeKey`. The worker claims rows
+  with an optimistic update, so two workers cannot run the same queued job.
+- **Fairness and retries:** the worker processes users round-robin with a
+  per-user batch limit. GitHub rate limits respect `retry-after`, transient
+  failures use exponential backoff with jitter, and stale worker locks are
+  recovered after 15 minutes. Backfills continue in bounded page batches.
+- **Scheduled discovery:** `POST /api/jobs/discover-repositories` requires
+  `Authorization: Bearer $JOB_SECRET`. It discovers repositories for users whose
+  last successful discovery is older than 24 hours. Optional query parameters:
+  `limit` (default 10, max 50) and `intervalHours` (default 24, max 168).
+- **Scheduled sync:** `POST /api/jobs/sync-repositories` requires the same
+  bearer secret. It enqueues due connections and processes pending queue rows.
+  Optional query parameters: `mode=enqueue|process|both` (default `both`),
+  `limit` (default 5, max 25), `perUserLimit` (default 2, max 10) and
+  `maxPages` (default 10, max 100).
+- **Cron example (GitHub Actions):**
+
+  ```yaml
+  on:
+    schedule:
+      - cron: "*/10 * * * *"
+  jobs:
+    sync:
+      runs-on: ubuntu-latest
+      steps:
+        - run: >-
+            curl -fsS -X POST
+            -H "Authorization: Bearer ${{ secrets.JOB_SECRET }}"
+            "${{ secrets.APP_BASE_URL }}/api/jobs/sync-repositories"
+  ```
+
+  Run discovery once or twice a day with the same authorization header.
+
+## Deployment and operations
+
+- **Hosting:** deploy the Next.js app to Vercel or an equivalent Node.js host
+  and use a managed PostgreSQL 16+ database. Long backfills must stay in the
+  bounded job/worker path; do not run them inside a page or short serverless
+  request.
+- **Environment:** set `DATABASE_URL`, `APP_BASE_URL`, `AUTH_SECRET`,
+  `JOB_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and
+  `GITHUB_WEBHOOK_SECRET`. Add `SUMMARY_PROVIDER` and
+  `SUMMARY_PROVIDER_API_KEY` only if daily summaries are enabled. Production
+  requires `AUTH_SECRET` and `JOB_SECRET`; the webhook endpoint requires
+  `GITHUB_WEBHOOK_SECRET`.
+- **OAuth callback:** register `${APP_BASE_URL}/api/auth/github/callback` as the
+  GitHub OAuth App callback URL. Organization repositories may require the
+  organization to approve the OAuth App or SSO. For least-privilege
+  organization/private access, a GitHub App with read-only repository and commit
+  permissions is the recommended production alternative to the `repo` OAuth
+  scope.
+- **Migrations:** run `npm run db:deploy` during deployment before starting the
+  new application version. Run `npm run db:generate` after schema changes.
+- **Jobs:** configure an external scheduler (Vercel Cron, GitHub Actions,
+  Kubernetes CronJob or a hosted scheduler) to call the two job endpoints with
+  `JOB_SECRET`. Keep the worker batch bounded so each invocation fits the host's
+  execution limit.
+- **Backups:** schedule encrypted PostgreSQL backups (for example
+  `pg_dump --format=custom`) and periodically test restore with
+  `pg_restore --clean --if-exists`. Back up before applying migrations that
+  change existing tables.
+- **Observability:** job and webhook outcomes are emitted as structured JSON
+  logs with request/delivery ids; set `LOG_LEVEL` to control verbosity. Route
+  application errors to an error-monitoring provider and alert on queue depth,
+  repeated sync failures, GitHub rate-limit errors, summary provider failures
+  and database health. Tokens, private commit data and README contents are never
+  logged.
+
 ## Commit sync
 
 - **Backfill:** `POST /api/user/repositories/[id]/sync` fetches commits from the
@@ -402,8 +495,9 @@ disabled and the landing page shows setup guidance.
 /api/user/...                       Other authenticated user APIs
 /api/admin/...                      Admin API scaffold
 /api/jobs/generate-daily-summaries  Generate yesterday's summaries (bearer secret)
-/api/jobs/...                       Other internal job endpoints (bearer secret)
-/api/webhooks/github                Webhook scaffold
+/api/jobs/discover-repositories     Scheduled repository discovery (bearer secret)
+/api/jobs/sync-repositories         Enqueue/process incremental syncs (bearer secret)
+/api/webhooks/github                Verified GitHub webhook receiver
 ```
 
 ## Troubleshooting
@@ -418,5 +512,13 @@ disabled and the landing page shows setup guidance.
   token is invalid or revoked. Reconnect GitHub from `/admin`.
 - **Repository discovery returns 429:** GitHub rate-limited the request. Wait for
   the reset window, then retry; the UI surfaces the safe error message.
+- **Webhook returns 401:** the `X-Hub-Signature-256` header does not match
+  `GITHUB_WEBHOOK_SECRET`. Re-enter the same secret in GitHub and `.env`.
+- **Webhook returns 503:** `GITHUB_WEBHOOK_SECRET` is empty. Set it before
+  enabling the GitHub webhook.
+- **Scheduled jobs return 401:** send `Authorization: Bearer $JOB_SECRET` and
+  make sure `JOB_SECRET` is set in the deployment environment.
+- **Syncs stay queued:** run `POST /api/jobs/sync-repositories?mode=process` and
+  inspect `SyncRun.errorCode`/`errorMessage` for safe failure details.
 - **Database errors:** confirm PostgreSQL is running and `DATABASE_URL` is
   correct, then run `npm run db:deploy`.

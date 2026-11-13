@@ -2,11 +2,13 @@
 import { createActivityService } from "@/server/services/activity-service";
 import { createAuthorEmailService } from "@/server/services/author-email-service";
 import { createGitHubConnectionService } from "@/server/services/github-connection-service";
+import { createGitHubWebhookService } from "@/server/services/github-webhook-service";
 import { createProjectService } from "@/server/services/project-service";
 import { createPublicProfileService } from "@/server/services/public-profile-service";
 import { createRepositoryDiscoveryService } from "@/server/services/repository-discovery-service";
 import { createRepositorySyncService } from "@/server/services/repository-sync-service";
 import { createSummaryService } from "@/server/services/summary-service";
+import { createSyncQueueService } from "@/server/services/sync-queue-service";
 import { createSyncRunService } from "@/server/services/sync-run-service";
 import { createUserProfileService } from "@/server/services/user-profile-service";
 import { createUserRepositoryService } from "@/server/services/user-repository-service";
@@ -24,12 +26,14 @@ export const services = {
   activity: createActivityService(prisma),
   projects: createProjectService(prisma),
   syncRuns: createSyncRunService(prisma),
+  syncQueue: createSyncQueueService(prisma),
   userProfile: createUserProfileService(prisma),
   userSettings: createUserSettingsService(prisma),
   summaries: createSummaryService(prisma),
   authorEmails: createAuthorEmailService(prisma),
   publicProfiles: createPublicProfileService(prisma),
   githubConnection: createGitHubConnectionService(prisma),
+  webhooks: createGitHubWebhookService(prisma),
   repositoryDiscovery: createRepositoryDiscoveryService(prisma),
   repositorySync: createRepositorySyncService(prisma),
 };

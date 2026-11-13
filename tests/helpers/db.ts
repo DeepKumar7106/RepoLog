@@ -13,7 +13,7 @@ export function getTestPrisma(): AppPrismaClient {
 
 export async function resetTestDatabase(prisma: AppPrismaClient) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "User", "GitHubRepository" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "User", "GitHubRepository", "GitHubWebhookDelivery" RESTART IDENTITY CASCADE',
   );
 }
 
