@@ -3,6 +3,7 @@ node_modules/
 
 # next.js
 .next/
+.next-e2e/
 out/
 build/
 dist/
@@ -13,6 +14,8 @@ src/generated/
 
 # testing
 coverage/
+playwright-report/
+test-results/
 
 # environment files
 .env

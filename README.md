@@ -57,6 +57,8 @@ Public profiles and activity**, **Milestone 7: Daily summaries**, and
   queue retries/backoff, scheduled enqueueing, project/profile management,
   author emails, public profile/activity privacy, daily summary
   privacy/caching and cross-tenant read/write denial against PostgreSQL.
+- Playwright browser tests for public pages, private-profile denial,
+  authenticated dashboard access, job authentication and webhook signatures.
 - ESLint and Prettier configuration.
 
 ## Requirements
@@ -169,6 +171,24 @@ npm test
 The test global setup applies Prisma migrations to `TEST_DATABASE_URL` before the
 integration tests run. Integration tests are skipped when `TEST_DATABASE_URL` is
 not set.
+
+Browser end-to-end tests use Playwright against a development server on port
+`3100` with the same test database:
+
+```bash
+npm run test:e2e
+```
+
+The E2E suite uses installed Google Chrome by default. To use Playwright's
+bundled Chromium instead:
+
+```bash
+npx playwright install --with-deps chromium
+PLAYWRIGHT_CHANNEL=chromium npm run test:e2e
+```
+
+It covers public profile/project rendering, private-profile 404s, authenticated
+dashboard access, job bearer authentication and webhook signature handling.
 
 ## Authentication and security
 
@@ -431,6 +451,7 @@ disabled and the landing page shows setup guidance.
 | `npm run format:check` | Check formatting                         |
 | `npm run typecheck`    | Run TypeScript without emitting          |
 | `npm test`             | Run unit and integration tests           |
+| `npm run test:e2e`     | Run Playwright browser tests             |
 | `npm run db:generate`  | Regenerate the Prisma client             |
 | `npm run db:migrate`   | Create and apply a development migration |
 | `npm run db:deploy`    | Apply existing migrations                |
