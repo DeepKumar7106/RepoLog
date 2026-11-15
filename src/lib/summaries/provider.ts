@@ -78,7 +78,9 @@ export function createOpenAiSummaryProvider(input: {
       const timeout = setTimeout(() => controller.abort(), 20_000);
 
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        const baseUrl = process.env.SUMMARY_BASE_URL || "https://api.openai.com/v1";
+        const endpoint = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${input.apiKey}`,
