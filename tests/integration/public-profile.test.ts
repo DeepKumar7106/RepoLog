@@ -152,6 +152,7 @@ describe.skipIf(!hasTestDatabase)("public profile and activity", () => {
     });
     expect(profile?.projects).toHaveLength(1);
     expect(project?.readmeMarkdown).toBe("# Public overview");
+    expect(project?.totalCommits).toBe(1);
     expect(project?.repository?.fullName).toBe(fixture.repository.fullName);
     expect(summary?.totals).toMatchObject({ commits: 2, activeDays: 1, projectCount: 1 });
     expect(summary?.days[0]).toMatchObject({

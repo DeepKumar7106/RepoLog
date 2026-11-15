@@ -1,15 +1,30 @@
+import {
+  ArrowUpRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  FolderGit2,
+  GitCommitHorizontal,
+  Settings,
+  TriangleAlert,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActivityDayDetails } from "@/components/activity/activity-day-details";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { DailySummaryCard } from "@/components/activity/daily-summary-card";
-import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusPill } from "@/components/ui/status-pill";
+import { VisibilityBadge } from "@/components/ui/visibility-badge";
 import { requireOnboardedSessionUser } from "@/lib/auth/session";
 import { createTenantContext } from "@/lib/tenancy/tenant-context";
 import { dateParamSchema, publicActivityQuerySchema } from "@/lib/validation/schemas";
 import { env } from "@/lib/validation/env";
 import { absolutePublicUrl, publicProjectPath } from "@/lib/urls/public-urls";
+import { formatDateTime, formatNumber, relativeTime } from "@/lib/ui/format";
 import { toProjectDto } from "@/server/dto/project-dto";
 import { services } from "@/server/services";
 
@@ -23,32 +38,8 @@ type PageProps = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
-const statusStyles: Record<string, string> = {
-  ONGOING: "bg-emerald-100 text-emerald-800",
-  COMPLETE: "bg-sky-100 text-sky-800",
-  ON_BREAK: "bg-amber-100 text-amber-800",
-};
-
-const statusLabels: Record<string, string> = {
-  ONGOING: "Ongoing",
-  COMPLETE: "Complete",
-  ON_BREAK: "On break",
-};
-
 function single(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
-}
-
-function formatDate(value: Date | string | null): string {
-  if (!value) {
-    return "Never";
-  }
-
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: typeof value === "string" ? undefined : "short",
-    timeZone: "UTC",
-  }).format(new Date(value));
 }
 
 export default async function DashboardPage({ searchParams }: PageProps) {
@@ -83,6 +74,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       services.userSettings.get(tenant),
     ]);
   const projects = projectRecords.map(toProjectDto);
+  const publicProjectCount = projects.filter((project) => project.visibility === "PUBLIC").length;
   const activity =
     (await services.activity.summary(tenant, activityOptions)) ??
     (await services.activity.summary(tenant));
@@ -101,11 +93,33 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ? await services.summaries.getDaySummary(tenant, selectedDate)
     : null;
   const displayName = session.displayName ?? session.githubLogin;
+  const syncInProgress = activityMetrics.backfilling > 0 || activityMetrics.running > 0;
+
   const metrics = [
-    { label: "Tracked repositories", value: String(counts.tracked) },
-    { label: "Qualifying commits", value: String(activityMetrics.commits) },
-    { label: "Active days", value: String(activityMetrics.activeDays) },
-    { label: "Projects", value: String(activityMetrics.projects) },
+    {
+      label: "Tracked repositories",
+      value: formatNumber(counts.tracked),
+      detail: `${formatNumber(counts.total)} discovered`,
+      icon: FolderGit2,
+    },
+    {
+      label: "Qualifying commits",
+      value: formatNumber(activityMetrics.commits),
+      detail: "Default branch, authored by you",
+      icon: GitCommitHorizontal,
+    },
+    {
+      label: "Active days",
+      value: formatNumber(activityMetrics.activeDays),
+      detail: "Days with qualifying commits",
+      icon: CalendarDays,
+    },
+    {
+      label: "Public projects",
+      value: formatNumber(publicProjectCount),
+      detail: `${formatNumber(counts.publicDisplay)} public repositories`,
+      icon: FolderGit2,
+    },
   ];
 
   return (
@@ -113,101 +127,189 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <PageHeader
         eyebrow="Private workspace"
         title={`Welcome, ${displayName}`}
-        description="Your project overview, activity timeline and sync progress."
+        description="Your project overview, development timeline and sync health in one place."
         actions={
-          <Link
-            className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900"
-            href="/admin/settings"
-          >
-            Settings
-          </Link>
+          <>
+            <Link
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-canvas px-3 text-xs font-medium text-primary transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              href="/admin/repositories"
+            >
+              Repositories
+            </Link>
+            <Link
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-accent-fg transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none"
+              href="/admin/settings"
+            >
+              <Settings aria-hidden="true" className="h-3.5 w-3.5" />
+              Settings
+            </Link>
+          </>
         }
       />
 
-      {connection.connected ? (
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            GitHub is connected. Discover repositories, enable tracking, then sync commit history
-            from Admin → Repositories.
-          </p>
-          <Link className="font-semibold underline" href="/admin/repositories">
-            Manage repositories
-          </Link>
-        </div>
-      ) : (
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
-          <p>
+      <div className="mb-6 space-y-3">
+        {connection.connected ? (
+          <Alert
+            tone="success"
+            action={
+              <Link
+                className="inline-flex h-8 items-center rounded-md border border-emerald-300/60 bg-emerald-50 px-3 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 dark:hover:bg-emerald-950"
+                href="/admin/repositories"
+              >
+                Manage repositories
+              </Link>
+            }
+          >
+            GitHub is connected. Discover repositories, enable tracking, then sync commit history.
+          </Alert>
+        ) : (
+          <Alert
+            action={
+              <a
+                className="inline-flex h-8 items-center rounded-md border border-amber-300/60 bg-amber-50 px-3 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-950"
+                href="/api/auth/github/start?mode=reconnect"
+              >
+                Reconnect GitHub
+              </a>
+            }
+            tone="warning"
+          >
             GitHub is disconnected. Existing imported data is retained, but syncing is stopped until
             you reconnect.
-          </p>
-          <Link className="font-semibold underline" href="/api/auth/github/start?mode=reconnect">
-            Reconnect GitHub
-          </Link>
-        </div>
-      )}
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((metric) => (
-          <Card key={metric.label}>
-            <p className="text-sm text-slate-500">{metric.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
-          </Card>
-        ))}
+          </Alert>
+        )}
+        {syncInProgress ? (
+          <Alert
+            action={
+              <Link
+                className="inline-flex h-8 items-center rounded-md border border-line bg-canvas px-3 text-xs font-medium text-primary hover:bg-hover"
+                href="/admin/repositories"
+              >
+                View sync status
+              </Link>
+            }
+            tone="info"
+          >
+            <span className="mr-2 inline-flex h-2 w-2 align-middle">
+              <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-sky-500 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500" />
+            </span>
+            {activityMetrics.backfilling > 0
+              ? `Backfilling ${formatNumber(activityMetrics.backfilling)} of ${formatNumber(
+                  counts.tracked,
+                )} repositories`
+              : `${formatNumber(activityMetrics.running)} sync${
+                  activityMetrics.running === 1 ? "" : "s"
+                } running`}
+            . Timeline totals may be incomplete until backfill completes.
+          </Alert>
+        ) : null}
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold text-slate-900">Project overview</h2>
-            <Link className="text-sm font-semibold text-slate-900 underline" href="/admin/projects">
-              Manage projects
+      <dl className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-4">
+        {metrics.map((metric) => {
+          const Icon = metric.icon;
+
+          return (
+            <div className="bg-canvas px-4 py-4" key={metric.label}>
+              <dt className="flex items-center gap-1.5 text-[11px] text-muted">
+                <Icon aria-hidden="true" className="h-3 w-3" />
+                {metric.label}
+              </dt>
+              <dd className="mt-1.5 text-2xl font-semibold tracking-tight text-primary tabular-nums">
+                {metric.value}
+              </dd>
+              <dd className="mt-0.5 truncate text-[11px] text-secondary">{metric.detail}</dd>
+            </div>
+          );
+        })}
+      </dl>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+        <section className="rounded-lg border border-line bg-canvas">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+            <div>
+              <h2 className="text-sm font-semibold text-primary">Project overview</h2>
+              <p className="mt-0.5 text-[11px] text-muted">
+                {projects.length} project{projects.length === 1 ? "" : "s"} from tracked
+                repositories
+              </p>
+            </div>
+            <Link
+              className="inline-flex items-center gap-1 rounded text-xs font-medium text-secondary transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              href="/admin/projects"
+            >
+              Manage
+              <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
             </Link>
           </div>
+
           {projects.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">
-              No projects yet. Enable tracking for a repository to create one.
-            </p>
+            <div className="p-5">
+              <EmptyState
+                className="border-0 bg-transparent py-8"
+                description="Enable tracking for a repository to create a project automatically."
+                icon={<FolderGit2 aria-hidden="true" className="h-4 w-4" />}
+                title="No projects yet"
+                action={
+                  <Link
+                    className="inline-flex h-8 items-center rounded-md bg-accent px-3 text-xs font-medium text-accent-fg"
+                    href="/admin/repositories"
+                  >
+                    Find repositories
+                  </Link>
+                }
+              />
+            </div>
           ) : (
-            <ul className="mt-4 space-y-3">
+            <ul className="divide-y divide-line">
               {projects.map((project) => (
-                <li className="rounded-xl border border-slate-200 p-3" key={project.id}>
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
+                <li className="px-5 py-3.5" key={project.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <Link
-                        className="font-semibold text-slate-900 underline"
+                        className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                         href={`/admin/projects/${project.id}`}
                       >
                         {project.displayTitle}
                       </Link>
-                      <p className="mt-1 text-xs text-slate-500">{project.repository.fullName}</p>
+                      <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
+                        {project.repository.fullName}
+                      </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          statusStyles[project.status] ?? "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {statusLabels[project.status] ?? project.status}
-                      </span>
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-                        {project.visibility}
-                      </span>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                      <StatusPill status={project.status} />
+                      <VisibilityBadge visibility={project.visibility} />
                     </div>
                   </div>
                   {project.shortDescription ? (
-                    <p className="mt-2 text-sm text-slate-600">{project.shortDescription}</p>
+                    <p className="mt-1.5 line-clamp-1 text-xs text-secondary">
+                      {project.shortDescription}
+                    </p>
                   ) : null}
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                    <span>Latest commit: {formatDate(project.latestCommitAt)}</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted">
+                    <span className="inline-flex items-center gap-1">
+                      <GitCommitHorizontal aria-hidden="true" className="h-3 w-3" />
+                      {formatNumber(project.commitCount)} commit
+                      {project.commitCount === 1 ? "" : "s"}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock aria-hidden="true" className="h-3 w-3" />
+                      Latest commit {formatDateTime(project.latestCommitAt)}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      First commit {formatDateTime(project.firstCommitAt)}
+                    </span>
                     {project.visibility === "PUBLIC" && session.profileVisibility === "PUBLIC" ? (
                       <a
-                        className="font-semibold text-slate-700 underline"
+                        className="inline-flex items-center gap-1 font-medium text-secondary hover:text-primary"
                         href={absolutePublicUrl(
                           publicProjectPath(session.profileSlug, project.slug),
                           env.APP_BASE_URL,
                         )}
                       >
                         Public page
+                        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
                       </a>
                     ) : null}
                   </div>
@@ -215,58 +317,139 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               ))}
             </ul>
           )}
-        </Card>
+        </section>
 
-        <Card>
-          <h2 className="font-semibold text-slate-900">Sync and backfill</h2>
-          {activityMetrics.backfilling > 0 ? (
-            <p className="mt-2 text-sm text-amber-800">
-              {activityMetrics.backfilling} tracked{" "}
-              {activityMetrics.backfilling === 1 ? "repository is" : "repositories are"} still
-              backfilling. Timeline totals are incomplete until those runs finish.
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-slate-600">
-              All tracked repositories have completed their initial backfill.
-            </p>
-          )}
-          {activityMetrics.running > 0 ? (
-            <p className="mt-2 text-sm text-slate-600">
-              {activityMetrics.running} sync {activityMetrics.running === 1 ? "is" : "are"} running
-              now.
-            </p>
-          ) : null}
-          {activityMetrics.failed > 0 ? (
-            <p className="mt-2 text-sm text-red-700">
-              {activityMetrics.failed} tracked{" "}
-              {activityMetrics.failed === 1 ? "repository has" : "repositories have"} a failed sync.
-              Open repository sync for safe error details.
-            </p>
-          ) : null}
-          <dl className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Last repository sync</dt>
-              <dd className="text-right font-medium text-slate-900">
-                {lastSync ? formatDate(lastSync.finishedAt ?? lastSync.startedAt) : "Never"}
-              </dd>
+        <div className="space-y-4">
+          <section className="rounded-lg border border-line bg-canvas">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+              <h2 className="text-sm font-semibold text-primary">Sync health</h2>
+              <Badge
+                dot
+                tone={
+                  activityMetrics.failed > 0
+                    ? "danger"
+                    : activityMetrics.backfilling > 0 || activityMetrics.running > 0
+                      ? "warning"
+                      : "success"
+                }
+              >
+                {activityMetrics.failed > 0
+                  ? "Needs attention"
+                  : activityMetrics.backfilling > 0 || activityMetrics.running > 0
+                    ? "In progress"
+                    : "Healthy"}
+              </Badge>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Repository</dt>
-              <dd className="max-w-[60%] text-right font-medium text-slate-900">
-                {lastSync?.userRepository?.githubRepository.fullName ?? "—"}
-              </dd>
+            <div className="space-y-3 p-5">
+              {activityMetrics.backfilling > 0 ? (
+                <p className="flex items-start gap-2 text-xs leading-5 text-amber-700 dark:text-amber-400">
+                  <TriangleAlert aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {activityMetrics.backfilling} tracked{" "}
+                  {activityMetrics.backfilling === 1 ? "repository is" : "repositories are"} still
+                  backfilling. Timeline totals may be incomplete.
+                </p>
+              ) : (
+                <p className="flex items-start gap-2 text-xs leading-5 text-secondary">
+                  <CheckCircle2
+                    aria-hidden="true"
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"
+                  />
+                  All tracked repositories have completed their initial backfill.
+                </p>
+              )}
+
+              {activityMetrics.running > 0 ? (
+                <p className="text-xs text-secondary">
+                  {activityMetrics.running} sync {activityMetrics.running === 1 ? "is" : "are"}{" "}
+                  running now.
+                </p>
+              ) : null}
+
+              {activityMetrics.failed > 0 ? (
+                <p className="text-xs leading-5 text-red-600 dark:text-red-400">
+                  {activityMetrics.failed} tracked{" "}
+                  {activityMetrics.failed === 1 ? "repository has" : "repositories have"} a failed
+                  sync. Open repository sync for safe error details.
+                </p>
+              ) : null}
+
+              <dl className="space-y-2 border-t border-line pt-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted">Last repository sync</dt>
+                  <dd className="text-right font-medium text-primary">
+                    {lastSync ? relativeTime(lastSync.finishedAt ?? lastSync.startedAt) : "Never"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted">Repository</dt>
+                  <dd className="max-w-[60%] truncate text-right font-mono text-[11px] text-secondary">
+                    {lastSync?.userRepository?.githubRepository.fullName ?? "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted">Status</dt>
+                  <dd>
+                    <Badge
+                      dot
+                      tone={
+                        lastSync?.status === "SUCCEEDED"
+                          ? "success"
+                          : lastSync?.status === "FAILED"
+                            ? "danger"
+                            : lastSync?.status === "PARTIAL"
+                              ? "warning"
+                              : "neutral"
+                      }
+                    >
+                      {lastSync?.status ?? "No runs"}
+                    </Badge>
+                  </dd>
+                </div>
+              </dl>
+
+              <Link
+                className="inline-flex items-center gap-1 text-xs font-medium text-secondary transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                href="/admin/repositories"
+              >
+                Review repository sync
+                <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+              </Link>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Status</dt>
-              <dd className="font-medium text-slate-900">{lastSync?.status ?? "—"}</dd>
-            </div>
-          </dl>
-          <div className="mt-4 text-sm">
-            <Link className="font-semibold text-slate-900 underline" href="/admin/repositories">
-              Review repository sync
-            </Link>
-          </div>
-        </Card>
+          </section>
+
+          <section className="rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-sm font-semibold text-primary">Next steps</h2>
+            <ul className="mt-3 space-y-2 text-xs">
+              <li>
+                <Link
+                  className="flex items-center justify-between gap-2 rounded text-secondary hover:text-primary"
+                  href="/admin/projects"
+                >
+                  Refine project titles and visibility
+                  <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+                </Link>
+              </li>
+              <li>
+                <Link
+                  className="flex items-center justify-between gap-2 rounded text-secondary hover:text-primary"
+                  href={`/u/${session.profileSlug}`}
+                >
+                  Preview your public profile
+                  <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+                </Link>
+              </li>
+              <li>
+                <Link
+                  className="flex items-center justify-between gap-2 rounded text-secondary hover:text-primary"
+                  href="/admin/settings"
+                >
+                  Review privacy and summaries
+                  <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+                </Link>
+              </li>
+            </ul>
+          </section>
+        </div>
       </div>
 
       {activity ? (
@@ -305,7 +488,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             />
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <EmptyState
+          description="Track a repository and run a sync to start building your timeline."
+          icon={<CalendarDays aria-hidden="true" className="h-4 w-4" />}
+          title="No activity yet"
+        />
+      )}
     </div>
   );
 }

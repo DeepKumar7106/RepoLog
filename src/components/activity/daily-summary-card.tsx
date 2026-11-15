@@ -1,5 +1,8 @@
+import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { DailySummaryDto } from "@/server/services/summary-service";
 import { RegenerateSummaryButton } from "./regenerate-summary-button";
 
@@ -39,9 +42,21 @@ export function DailySummaryCard({
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-slate-900">Daily summary</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {formatDateKey(date)} · {timezone}
+          <p className="flex items-center gap-1.5 font-mono text-[10px] font-medium tracking-[0.14em] text-muted uppercase">
+            <Sparkles aria-hidden="true" className="h-3 w-3" />
+            Daily summary
+          </p>
+          <h2 className="mt-1.5 text-sm font-semibold text-primary">{formatDateKey(date)}</h2>
+          <p className="mt-1 text-xs text-secondary">
+            <span className="tabular">{timezone}</span>
+            {summary ? (
+              <>
+                <span className="px-1 text-muted">·</span>
+                <Badge tone={summary.scope === "PUBLIC" ? "info" : "neutral"} className="ml-1">
+                  {summary.scope === "PUBLIC" ? "Public summary" : "Private summary"}
+                </Badge>
+              </>
+            ) : null}
           </p>
         </div>
         {canRegenerate && summary ? (
@@ -50,50 +65,51 @@ export function DailySummaryCard({
       </div>
 
       {!summary ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-600">
-            No summary is available for this day yet. Summaries are optional and are generated after
-            the local day ends.
-          </p>
-          {canRegenerate ? <RegenerateSummaryButton date={date} scope={regenerateScope} /> : null}
+        <div className="mt-4">
+          <EmptyState
+            className="py-8"
+            description="No summary is available for this day yet. Summaries are optional and are generated after the local day ends."
+            title="No summary yet"
+            action={canRegenerate ? <RegenerateSummaryButton date={date} scope={regenerateScope} /> : undefined}
+          />
         </div>
       ) : (
         <div className="mt-4 space-y-4">
           {summary.headline ? (
-            <p className="text-lg font-semibold text-slate-900">{summary.headline}</p>
+            <p className="text-base leading-6 font-semibold text-primary">{summary.headline}</p>
           ) : null}
           {summary.summary ? (
-            <p className="text-sm leading-6 whitespace-pre-line text-slate-700">
-              {summary.summary}
-            </p>
+            <p className="text-sm leading-6 whitespace-pre-line text-secondary">{summary.summary}</p>
           ) : null}
           {summary.projectHighlights.length > 0 ? (
-            <ul className="space-y-2">
+            <ul className="grid gap-2 sm:grid-cols-2">
               {summary.projectHighlights.map((highlight) => {
                 const project = projectById.get(highlight.projectId);
                 const title = project?.displayTitle ?? "Project";
 
                 return (
                   <li
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+                    className="rounded-md border border-line bg-surface px-3 py-2.5 text-sm text-secondary"
                     key={`${highlight.projectId}-${highlight.text}`}
                   >
                     {project?.href ? (
-                      <Link className="font-semibold text-slate-900 underline" href={project.href}>
+                      <Link
+                        className="font-medium text-primary underline decoration-line underline-offset-4 hover:decoration-current"
+                        href={project.href}
+                      >
                         {title}
                       </Link>
                     ) : (
-                      <span className="font-semibold text-slate-900">{title}</span>
+                      <span className="font-medium text-primary">{title}</span>
                     )}
-                    <span className="mt-1 block">{highlight.text}</span>
+                    <span className="mt-1 block text-xs leading-5">{highlight.text}</span>
                   </li>
                 );
               })}
             </ul>
           ) : null}
-          <p className="text-xs text-slate-500">
-            {summary.scope === "PUBLIC" ? "Public summary" : "Private summary"}
-            {summary.provider ? ` · ${summary.provider}` : ""}
+          <p className="font-mono text-[10px] text-muted">
+            {summary.provider ?? "Generated summary"}
             {summary.model ? ` · ${summary.model}` : ""}
           </p>
         </div>

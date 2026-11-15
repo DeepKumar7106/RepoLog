@@ -1,7 +1,9 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type RegenerateSummaryButtonProps = Readonly<{
   date: string;
@@ -37,16 +39,16 @@ export function RegenerateSummaryButton({ date, scope }: RegenerateSummaryButton
   }
 
   return (
-    <div className="text-right">
-      <button
-        className="text-xs font-semibold text-slate-700 underline disabled:opacity-60"
-        disabled={isBusy}
-        onClick={regenerate}
-        type="button"
-      >
-        {isBusy ? "Regenerating\u2026" : "Regenerate summary"}
-      </button>
-      {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
+    <div className="flex flex-col items-end gap-1">
+      <Button loading={isBusy} onClick={regenerate} size="sm" variant="secondary">
+        {isBusy ? null : <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />}
+        {isBusy ? "Regenerating…" : "Regenerate"}
+      </Button>
+      {error ? (
+        <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

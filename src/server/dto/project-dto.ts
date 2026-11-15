@@ -8,7 +8,11 @@
 } from "@/generated/prisma/client";
 
 export type ProjectRecord = Prisma.ProjectGetPayload<{
-  include: { userRepository: { include: { githubRepository: true } } };
+  include: {
+    userRepository: {
+      include: { githubRepository: true; _count: { select: { commits: true } } };
+    };
+  };
 }>;
 
 export type ProjectDto = {
@@ -23,6 +27,7 @@ export type ProjectDto = {
   publicReadmeUpdatedAt: string | null;
   firstCommitAt: string | null;
   latestCommitAt: string | null;
+  commitCount: number;
   userRepository: {
     id: string;
     publicDisplayEnabled: boolean;
@@ -62,6 +67,7 @@ export function toProjectDto(record: ProjectRecord): ProjectDto {
     publicReadmeUpdatedAt: toIso(record.publicReadmeUpdatedAt),
     firstCommitAt: toIso(record.firstCommitAt),
     latestCommitAt: toIso(record.latestCommitAt),
+    commitCount: record.userRepository._count.commits,
     userRepository: {
       id: record.userRepository.id,
       publicDisplayEnabled: record.userRepository.publicDisplayEnabled,

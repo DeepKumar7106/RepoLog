@@ -1,15 +1,25 @@
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  CalendarDays,
+  ExternalLink,
+  FolderGit2,
+  GitBranch,
+  GitCommitHorizontal,
+} from "lucide-react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityDayDetails } from "@/components/activity/activity-day-details";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
-import { CopyLinkButton } from "@/components/public/copy-link-button";
 import { MarkdownContent } from "@/components/public/markdown-content";
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { dateParamSchema, publicActivityQuerySchema } from "@/lib/validation/schemas";
+import { CopyButton } from "@/components/ui/copy-button";
+import { StatusPill } from "@/components/ui/status-pill";
 import { env } from "@/lib/validation/env";
+import { dateParamSchema, publicActivityQuerySchema } from "@/lib/validation/schemas";
 import { absolutePublicUrl, publicProfilePath, publicProjectPath } from "@/lib/urls/public-urls";
+import { formatDate, formatNumber } from "@/lib/ui/format";
 import { services } from "@/server/services";
 
 export const dynamic = "force-dynamic";
@@ -19,24 +29,14 @@ type PageProps = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
-const statusStyles: Record<string, string> = {
-  ONGOING: "bg-emerald-100 text-emerald-800",
-  COMPLETE: "bg-sky-100 text-sky-800",
-  ON_BREAK: "bg-amber-100 text-amber-800",
-};
-
-const statusLabels: Record<string, string> = {
-  ONGOING: "Ongoing",
-  COMPLETE: "Complete",
-  ON_BREAK: "On break",
+const activityDetailLabels: Record<string, string> = {
+  HIDDEN: "Activity hidden",
+  AGGREGATED: "Daily counts",
+  COMMIT_DETAILS: "Daily counts and commit details",
 };
 
 function single(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
-}
-
-function formatDate(value: string | null): string {
-  return value ? new Date(value).toISOString().slice(0, 10) : "Not available";
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -124,96 +124,186 @@ export default async function PublicProjectPage({ params, searchParams }: PagePr
     publicProjectPath(project.owner.profileSlug, project.slug),
     env.APP_BASE_URL,
   );
+  const ownerName = project.owner.displayName ?? project.owner.githubLogin;
 
   return (
     <div className="space-y-8">
-      <div>
-        <Link
-          className="text-sm font-medium text-slate-600 underline"
-          href={publicProfilePath(project.owner.profileSlug)}
-        >
-          Back to @{project.owner.profileSlug}
-        </Link>
-      </div>
+      <Link
+        className="inline-flex items-center gap-1.5 rounded text-xs font-medium text-secondary transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+        href={publicProfilePath(project.owner.profileSlug)}
+      >
+        <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
+        Back to @{project.owner.profileSlug}
+      </Link>
 
-      <PageHeader
-        eyebrow="Public project"
-        title={project.displayTitle}
-        description={project.shortDescription ?? undefined}
-        actions={<CopyLinkButton url={projectUrl} />}
-      />
-
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
-        <Card>
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                statusStyles[project.status] ?? "bg-slate-100 text-slate-700"
-              }`}
-            >
-              {statusLabels[project.status] ?? project.status}
-            </span>
-            <span className="text-xs text-slate-500">
-              Activity detail: {project.activityDetail.toLowerCase().replaceAll("_", " ")}
-            </span>
+      <header className="border-b border-line pb-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill status={project.status} />
+          <span className="text-[11px] text-muted">
+            {activityDetailLabels[project.activityDetail] ?? "Daily counts"}
+          </span>
+        </div>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold tracking-tight text-primary sm:text-4xl">
+              {project.displayTitle}
+            </h1>
+            {project.shortDescription ? (
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-secondary">
+                {project.shortDescription}
+              </p>
+            ) : null}
           </div>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-slate-500">First qualifying commit</dt>
-              <dd className="font-medium text-slate-900">{formatDate(project.firstCommitAt)}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Latest qualifying commit</dt>
-              <dd className="font-medium text-slate-900">{formatDate(project.latestCommitAt)}</dd>
-            </div>
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <CopyButton label="Share project" size="sm" url={projectUrl} />
             {project.demoUrl ? (
               <a
-                className="font-semibold text-slate-900 underline"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-canvas px-3 text-xs font-medium text-primary transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                 href={project.demoUrl}
                 rel="noreferrer"
                 target="_blank"
               >
                 Live demo
-              </a>
-            ) : null}
-            {project.repository ? (
-              <a
-                className="font-semibold text-slate-900 underline"
-                href={project.repository.htmlUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {project.repository.fullName} on GitHub
+                <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
               </a>
             ) : null}
           </div>
-        </Card>
-        <Card>
-          <h2 className="font-semibold text-slate-900">Owner</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            {project.owner.displayName ?? project.owner.githubLogin}
-          </p>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-secondary">
           <Link
-            className="mt-2 inline-block text-sm font-semibold text-slate-900 underline"
+            className="inline-flex items-center gap-1.5 rounded transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
             href={publicProfilePath(project.owner.profileSlug)}
           >
+            {project.owner.avatarUrl ? (
+              <Image
+                alt=""
+                className="h-5 w-5 rounded-full border border-line"
+                height={20}
+                src={project.owner.avatarUrl}
+                unoptimized
+                width={20}
+              />
+            ) : (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line bg-surface text-[9px] font-semibold">
+                {ownerName.charAt(0).toUpperCase()}
+              </span>
+            )}
             @{project.owner.profileSlug}
           </Link>
-        </Card>
-      </div>
-
-      <Card>
-        <h2 className="font-semibold text-slate-900">README</h2>
-        <div className="mt-3">
-          {project.readmeMarkdown ? (
-            <MarkdownContent markdown={project.readmeMarkdown} />
-          ) : (
-            <p className="text-sm text-slate-500">No public README has been published.</p>
-          )}
+          {project.repository ? (
+            <a
+              className="inline-flex items-center gap-1.5 rounded transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              href={project.repository.htmlUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <GitBranch aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
+              {project.repository.fullName}
+              <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+            </a>
+          ) : null}
+          {project.firstCommitAt ? (
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
+              Started {formatDate(project.firstCommitAt)}
+            </span>
+          ) : null}
         </div>
-      </Card>
+      </header>
+
+      <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3">
+        <div className="bg-canvas px-4 py-4">
+          <dt className="flex items-center gap-1.5 text-[11px] text-muted">
+            <CalendarDays aria-hidden="true" className="h-3 w-3" />
+            First qualifying commit
+          </dt>
+          <dd className="mt-1.5 text-base font-semibold tracking-tight text-primary tabular-nums">
+            {formatDate(project.firstCommitAt)}
+          </dd>
+        </div>
+        <div className="bg-canvas px-4 py-4">
+          <dt className="flex items-center gap-1.5 text-[11px] text-muted">
+            <CalendarDays aria-hidden="true" className="h-3 w-3" />
+            Latest activity
+          </dt>
+          <dd className="mt-1.5 text-base font-semibold tracking-tight text-primary tabular-nums">
+            {formatDate(project.latestCommitAt)}
+          </dd>
+        </div>
+        <div className="bg-canvas px-4 py-4">
+          <dt className="flex items-center gap-1.5 text-[11px] text-muted">
+            <GitCommitHorizontal aria-hidden="true" className="h-3 w-3" />
+            Total qualifying commits
+          </dt>
+          <dd className="mt-1.5 text-base font-semibold tracking-tight text-primary tabular-nums">
+            {formatNumber(project.totalCommits)}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,0.75fr)]">
+        <section className="rounded-lg border border-line bg-canvas">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+            <h2 className="text-sm font-semibold text-primary">README</h2>
+            <span className="font-mono text-[10px] text-muted">Published excerpt</span>
+          </div>
+          <div className="p-5">
+            {project.readmeMarkdown ? (
+              <MarkdownContent markdown={project.readmeMarkdown} />
+            ) : (
+              <p className="text-sm text-secondary">No public README has been published.</p>
+            )}
+          </div>
+        </section>
+
+        <aside className="space-y-3">
+          <section className="rounded-lg border border-line bg-canvas p-5">
+            <h2 className="text-sm font-semibold text-primary">Project details</h2>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-secondary">Status</dt>
+                <dd>
+                  <StatusPill status={project.status} />
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+                <dt className="text-xs text-secondary">First commit</dt>
+                <dd className="tabular text-xs font-medium text-primary">
+                  {formatDate(project.firstCommitAt)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+                <dt className="text-xs text-secondary">Latest commit</dt>
+                <dd className="tabular text-xs font-medium text-primary">
+                  {formatDate(project.latestCommitAt)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+                <dt className="text-xs text-secondary">Activity</dt>
+                <dd className="text-right text-xs font-medium text-primary">
+                  {activityDetailLabels[project.activityDetail] ?? "Daily counts"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-line bg-surface p-5">
+            <div className="flex items-center gap-2">
+              <FolderGit2 aria-hidden="true" className="h-4 w-4 text-muted" />
+              <h2 className="text-sm font-semibold text-primary">Owner</h2>
+            </div>
+            <p className="mt-3 text-sm font-medium text-primary">{ownerName}</p>
+            <Link
+              className="mt-1 inline-flex items-center gap-1 rounded font-mono text-xs text-secondary transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              href={publicProfilePath(project.owner.profileSlug)}
+            >
+              @{project.owner.profileSlug}
+              <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+            </Link>
+          </section>
+        </aside>
+      </div>
 
       <ActivityTimeline
         basePath={publicProjectPath(project.owner.profileSlug, project.slug)}
@@ -224,6 +314,7 @@ export default async function PublicProjectPage({ params, searchParams }: PagePr
         selectedDate={selectedDate}
         showProjectFilter={false}
         timezone={activity.timezone}
+        title="Project activity"
         to={activity.to}
       />
 

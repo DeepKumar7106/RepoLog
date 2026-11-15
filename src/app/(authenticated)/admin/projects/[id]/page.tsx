@@ -1,9 +1,12 @@
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { buttonVariants } from "@/components/ui/button";
 import { requireOnboardedSessionUser } from "@/lib/auth/session";
 import { createTenantContext } from "@/lib/tenancy/tenant-context";
+import { absolutePublicUrl, publicProjectPath } from "@/lib/urls/public-urls";
 import { env } from "@/lib/validation/env";
 import { toProjectDto } from "@/server/dto/project-dto";
 import { services } from "@/server/services";
@@ -28,20 +31,43 @@ export default async function AdminProjectDetailPage({
   }
 
   const projectDto = toProjectDto(project);
+  const publicUrl = absolutePublicUrl(
+    publicProjectPath(session.profileSlug, projectDto.slug),
+    env.APP_BASE_URL,
+  );
 
   return (
     <div>
+      <Link
+        className="mb-5 inline-flex items-center gap-1.5 rounded text-xs font-medium text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        href="/admin/projects"
+      >
+        <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
+        All projects
+      </Link>
+
       <PageHeader
-        eyebrow="Admin"
+        eyebrow="Project"
         title={projectDto.displayTitle}
-        description={`${projectDto.repository.fullName} \u00b7 One project maps to one tracked repository.`}
+        description={`${projectDto.repository.fullName} · One project maps to one tracked repository.`}
         actions={
-          <Link
-            className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900"
-            href="/admin/projects"
-          >
-            All projects
-          </Link>
+          <>
+            <Link
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
+              href="/admin/repositories"
+            >
+              Repositories
+            </Link>
+            <a
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              href={publicUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Public preview
+              <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+            </a>
+          </>
         }
       />
 

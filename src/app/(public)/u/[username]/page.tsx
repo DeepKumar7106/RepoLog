@@ -1,3 +1,4 @@
+import { ArrowUpRight, CalendarDays, GitCommitHorizontal, FolderGit2 } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -5,12 +6,13 @@ import { notFound } from "next/navigation";
 import { ActivityDayDetails } from "@/components/activity/activity-day-details";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { DailySummaryCard } from "@/components/activity/daily-summary-card";
-import { CopyLinkButton } from "@/components/public/copy-link-button";
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { CopyButton } from "@/components/ui/copy-button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusPill } from "@/components/ui/status-pill";
 import { env } from "@/lib/validation/env";
 import { dateParamSchema, publicActivityQuerySchema } from "@/lib/validation/schemas";
 import { absolutePublicUrl, publicProfilePath, publicProjectPath } from "@/lib/urls/public-urls";
+import { formatDate, formatRange, formatNumber } from "@/lib/ui/format";
 import { services } from "@/server/services";
 
 export const dynamic = "force-dynamic";
@@ -19,18 +21,6 @@ type PageProps = Readonly<{
   params: Promise<{ username: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
-
-const statusStyles: Record<string, string> = {
-  ONGOING: "bg-emerald-100 text-emerald-800",
-  COMPLETE: "bg-sky-100 text-sky-800",
-  ON_BREAK: "bg-amber-100 text-amber-800",
-};
-
-const statusLabels: Record<string, string> = {
-  ONGOING: "Ongoing",
-  COMPLETE: "Complete",
-  ON_BREAK: "On break",
-};
 
 function single(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -132,63 +122,135 @@ export default async function PublicProfilePage({ params, searchParams }: PagePr
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Public profile"
-        title={profileTitle(profile)}
-        description={description}
-        actions={<CopyLinkButton url={profileUrl} />}
-      />
-
-      <section className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-6">
-        {profile.avatarUrl ? (
-          <Image
-            alt=""
-            className="h-16 w-16 rounded-full border border-slate-200"
-            height={64}
-            src={profile.avatarUrl}
-            unoptimized
-            width={64}
-          />
-        ) : null}
-        <div>
-          <p className="text-sm text-slate-500">@{profile.profileSlug}</p>
-          <p className="mt-1 text-sm text-slate-600">
-            {activity.totals.commits} qualifying commits · {activity.totals.activeDays} active days
-            · {activity.totals.projectCount} active projects in the selected range
-          </p>
+      <header className="flex flex-col gap-6 border-b border-line pb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          {profile.avatarUrl ? (
+            <Image
+              alt=""
+              className="h-16 w-16 rounded-full border border-line"
+              height={64}
+              priority
+              src={profile.avatarUrl}
+              unoptimized
+              width={64}
+            />
+          ) : (
+            <span className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-lg font-semibold text-secondary">
+              {profileTitle(profile).charAt(0).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] font-medium tracking-[0.14em] text-muted uppercase">
+              Public profile
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-primary sm:text-3xl">
+              {profileTitle(profile)}
+            </h1>
+            <p className="mt-1 font-mono text-xs text-secondary">@{profile.profileSlug}</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-secondary">{description}</p>
+          </div>
         </div>
-      </section>
+        <div className="flex shrink-0 items-center gap-2">
+          <CopyButton label="Share profile" size="sm" url={profileUrl} />
+        </div>
+      </header>
+
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-4">
+        {[
+          {
+            label: "Qualifying commits",
+            value: formatNumber(activity.totals.commits),
+            detail: <span>{activity.totals.commits} qualifying commits</span>,
+            icon: GitCommitHorizontal,
+          },
+          {
+            label: "Active days",
+            value: formatNumber(activity.totals.activeDays),
+            detail: "Days with activity",
+            icon: CalendarDays,
+          },
+          {
+            label: "Projects",
+            value: formatNumber(activity.totals.projectCount),
+            detail: "Active in range",
+            icon: FolderGit2,
+          },
+          {
+            label: "Range",
+            value: formatRange(activity.from, activity.to),
+            detail: activity.timezone,
+            icon: CalendarDays,
+          },
+        ].map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <div className="bg-canvas px-4 py-4" key={stat.label}>
+              <dt className="flex items-center gap-1.5 text-[11px] text-muted">
+                <Icon aria-hidden="true" className="h-3 w-3" />
+                {stat.label}
+              </dt>
+              <dd className="mt-1.5 truncate text-xl font-semibold tracking-tight text-primary tabular-nums">
+                {stat.value}
+              </dd>
+              <dd className="mt-0.5 truncate text-[11px] text-secondary">{stat.detail}</dd>
+            </div>
+          );
+        })}
+      </dl>
 
       <section>
-        <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-primary">Projects</h2>
+            <p className="mt-1 text-xs text-secondary">
+              {profile.projects.length} published project{profile.projects.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          {activity.totals.latestCommitAt ? (
+            <p className="hidden text-[11px] text-muted sm:block">
+              Latest commit {formatDate(activity.totals.latestCommitAt)}
+            </p>
+          ) : null}
+        </div>
+
         {profile.projects.length === 0 ? (
-          <Card className="mt-3">
-            <p className="text-sm text-slate-500">No public projects yet.</p>
-          </Card>
+          <EmptyState
+            description="This profile has no published projects yet."
+            icon={<FolderGit2 aria-hidden="true" className="h-4 w-4" />}
+            title="No public projects yet"
+          />
         ) : (
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {profile.projects.map((project) => (
-              <Link href={publicProjectPath(profile.profileSlug, project.slug)} key={project.slug}>
-                <Card className="h-full transition hover:border-slate-400">
+              <Link
+                className="group flex h-full flex-col justify-between rounded-lg border border-line bg-canvas p-4 transition-colors hover:border-line-strong hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                href={publicProjectPath(profile.profileSlug, project.slug)}
+                key={project.slug}
+                prefetch={false}
+              >
+                <div>
                   <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-semibold text-slate-900">{project.displayTitle}</h3>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        statusStyles[project.status] ?? "bg-slate-100 text-slate-700"
-                      }`}
-                    >
-                      {statusLabels[project.status] ?? project.status}
-                    </span>
+                    <h3 className="text-sm font-semibold text-primary">{project.displayTitle}</h3>
+                    <StatusPill status={project.status} />
                   </div>
                   {project.shortDescription ? (
-                    <p className="mt-2 text-sm text-slate-600">{project.shortDescription}</p>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-secondary">
+                      {project.shortDescription}
+                    </p>
                   ) : null}
-                  <p className="mt-3 text-xs text-slate-500">
-                    {project.latestCommitAt
-                      ? `Latest commit ${new Date(project.latestCommitAt).toISOString().slice(0, 10)}`
+                </div>
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">
+                  <p className="text-[11px] text-muted">
+                    {project.firstCommitAt || project.latestCommitAt
+                      ? `Active ${formatRange(project.firstCommitAt, project.latestCommitAt)}`
                       : "No qualifying commits yet"}
                   </p>
-                </Card>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-secondary transition-colors group-hover:text-primary">
+                    View
+                    <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+                  </span>
+                </div>
               </Link>
             ))}
           </div>

@@ -24,7 +24,7 @@ function renderInline(text: string): ReactNode[] {
 
     if (token.startsWith("`") && token.endsWith("`")) {
       return (
-        <code className="rounded bg-slate-100 px-1 py-0.5 text-[0.9em]" key={index}>
+        <code className="rounded border border-line bg-surface px-1 py-0.5 font-mono text-[0.9em] text-primary" key={index}>
           {token.slice(1, -1)}
         </code>
       );
@@ -38,7 +38,7 @@ function renderInline(text: string): ReactNode[] {
       if (isSafeLink(url)) {
         return (
           <a
-            className="font-medium text-slate-900 underline"
+            className="font-medium text-primary underline decoration-line underline-offset-4 transition-colors hover:decoration-current"
             href={url}
             key={index}
             rel="noreferrer"
@@ -163,14 +163,14 @@ export function MarkdownContent({ markdown }: Readonly<{ markdown: string }>) {
   const blocks = parseMarkdown(markdown);
 
   return (
-    <div className="space-y-4 text-sm leading-6 text-slate-700">
+    <div className="space-y-4 text-sm leading-6 text-secondary">
       {blocks.map((block, index) => {
         if (block.type === "heading") {
           const level = Math.min(Math.max(block.level, 1), 3);
           const Tag = `h${level}` as "h1" | "h2" | "h3";
 
           return (
-            <Tag className="font-semibold text-slate-900" key={index}>
+            <Tag className="font-semibold tracking-tight text-primary" key={index}>
               {renderInline(block.text)}
             </Tag>
           );
@@ -179,7 +179,7 @@ export function MarkdownContent({ markdown }: Readonly<{ markdown: string }>) {
         if (block.type === "code") {
           return (
             <pre
-              className="overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100"
+              className="scrollbar-thin overflow-x-auto rounded-md border border-line bg-zinc-950 p-3 font-mono text-xs text-zinc-100"
               key={index}
             >
               <code>{block.text}</code>

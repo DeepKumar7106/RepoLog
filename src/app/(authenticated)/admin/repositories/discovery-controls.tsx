@@ -1,7 +1,10 @@
 "use client";
 
+import { CheckCheck, RefreshCw, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 type DiscoveryResult = {
   discovered: number;
@@ -104,45 +107,62 @@ export function DiscoveryControls({ connected, total }: DiscoveryControlsProps) 
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap gap-3">
-        <button
-          className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          disabled={!connected || isDiscovering}
-          onClick={discover}
-          type="button"
-        >
-          {isDiscovering ? "Discovering…" : "Refresh repositories"}
-        </button>
-        <button
-          className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-          disabled={!connected || isBulkSaving || total === 0}
-          onClick={() => setAllTracking(true)}
-          type="button"
-        >
-          Track all discovered
-        </button>
-        <button
-          className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-          disabled={!connected || isBulkSaving || total === 0}
-          onClick={() => setAllTracking(false)}
-          type="button"
-        >
-          Untrack all
-        </button>
+    <section className="rounded-lg border border-line bg-surface">
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-canvas">
+            <RefreshCw aria-hidden="true" className="h-3.5 w-3.5 text-secondary" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-primary">Repository discovery</h2>
+            <p className="mt-0.5 text-xs leading-5 text-secondary">
+              Refresh the list from GitHub, then track everything or manage repositories
+              individually below.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <Button
+            disabled={!connected || isDiscovering}
+            loading={isDiscovering}
+            onClick={discover}
+            size="sm"
+          >
+            {isDiscovering ? null : <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />}
+            {isDiscovering ? "Discovering…" : "Refresh repositories"}
+          </Button>
+          <Button
+            disabled={!connected || isBulkSaving || total === 0}
+            onClick={() => setAllTracking(true)}
+            size="sm"
+            variant="secondary"
+          >
+            <CheckCheck aria-hidden="true" className="h-3.5 w-3.5" />
+            Track all
+          </Button>
+          <Button
+            disabled={!connected || isBulkSaving || total === 0}
+            onClick={() => setAllTracking(false)}
+            size="sm"
+            variant="secondary"
+          >
+            <XCircle aria-hidden="true" className="h-3.5 w-3.5" />
+            Untrack all
+          </Button>
+        </div>
       </div>
 
       {message ? (
-        <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          {message}
-        </p>
+        <div className="border-t border-line p-4">
+          <Alert tone="success">{message}</Alert>
+        </div>
       ) : null}
 
       {error ? (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          {error}
-        </p>
+        <div className="border-t border-line p-4">
+          <Alert tone="danger">{error}</Alert>
+        </div>
       ) : null}
-    </div>
+    </section>
   );
 }

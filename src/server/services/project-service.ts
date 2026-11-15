@@ -38,6 +38,7 @@ const projectInclude = {
   userRepository: {
     include: {
       githubRepository: true,
+      _count: { select: { commits: true } },
     },
   },
 } as const;

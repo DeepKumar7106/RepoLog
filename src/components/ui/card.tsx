@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/ui/format";
 
 export function Card({
   children,
-  className = "",
+  className,
 }: Readonly<{ children: ReactNode; className?: string }>) {
   return (
-    <section className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+    <section className={cn("rounded-lg border border-line bg-canvas p-5", className)}>
       {children}
     </section>
   );

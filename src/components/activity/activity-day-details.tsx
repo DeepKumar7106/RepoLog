@@ -1,3 +1,6 @@
+import { ArrowUpRight, CalendarDays, GitCommitHorizontal, Lock } from "lucide-react";
+import { cn } from "@/lib/ui/format";
+
 type ActivityDayProject = {
   slug: string;
   displayTitle: string;
@@ -32,10 +35,10 @@ function formatDateKey(date: string): string {
   }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
-function formatDateTime(value: string, timezone: string): string {
+function formatTime(value: string, timezone: string): string {
   return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    hour: "numeric",
+    minute: "2-digit",
     timeZone: timezone,
   }).format(new Date(value));
 }
@@ -58,6 +61,10 @@ function formatChangeSummary(project: ActivityDayProject): string | null {
   return parts.join(" · ");
 }
 
+function firstLine(message: string): string {
+  return message.split("\n")[0]?.trim() || message;
+}
+
 export function ActivityDayDetails({
   date,
   totalCommits,
@@ -66,77 +73,116 @@ export function ActivityDayDetails({
   timezone,
 }: ActivityDayDetailsProps) {
   return (
-    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">{formatDateKey(date)}</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {totalCommits} qualifying commit{totalCommits === 1 ? "" : "s"}
-        </p>
+    <section className="rounded-lg border border-line bg-canvas">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line p-5">
+        <div>
+          <h2 className="text-sm font-semibold text-primary">{formatDateKey(date)}</h2>
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-secondary">
+            <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
+            <span className="tabular">{date}</span>
+            <span className="text-muted">·</span>
+            <GitCommitHorizontal aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
+            {totalCommits} qualifying commit{totalCommits === 1 ? "" : "s"}
+          </p>
+        </div>
+        <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] text-muted">
+          {timezone}
+        </span>
       </div>
 
-      {projects.length > 0 ? (
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Projects</h3>
-          <ul className="mt-2 space-y-2">
-            {projects.map((project) => {
-              const changeSummary = formatChangeSummary(project);
+      <div className="space-y-6 p-5">
+        {projects.length > 0 ? (
+          <div>
+            <h3 className="mb-2 text-[11px] font-medium tracking-[0.12em] text-muted uppercase">
+              Projects touched
+            </h3>
+            <ul className="divide-y divide-line overflow-hidden rounded-md border border-line">
+              {projects.map((project) => {
+                const changeSummary = formatChangeSummary(project);
 
-              return (
-                <li
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"
-                  key={project.slug}
-                >
-                  <span className="font-medium text-slate-900">{project.displayTitle}</span>
-                  <span className="text-slate-500">
-                    {project.commitCount} commit{project.commitCount === 1 ? "" : "s"}
-                    {changeSummary ? ` · ${changeSummary}` : ""}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
-
-      {commits.length > 0 ? (
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Commits</h3>
-          <ol className="mt-2 space-y-3">
-            {commits.map((commit) => (
-              <li className="rounded-xl border border-slate-200 p-3" key={commit.sha}>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span className="font-mono">{commit.sha.slice(0, 7)}</span>
-                  <span>{commit.projectTitle || commit.projectSlug}</span>
-                  <span>{commit.authorName}</span>
-                  <time dateTime={commit.authorDate}>
-                    {formatDateTime(commit.authorDate, timezone)}
-                  </time>
-                </div>
-                <p className="mt-2 text-sm whitespace-pre-line text-slate-900">{commit.message}</p>
-                {commit.htmlUrl ? (
-                  <a
-                    className="mt-2 inline-block text-xs font-semibold text-slate-700 underline"
-                    href={commit.htmlUrl}
-                    rel="noreferrer"
-                    target="_blank"
+                return (
+                  <li
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-hover/60"
+                    key={project.slug}
                   >
-                    View on GitHub
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : totalCommits > 0 ? (
-        <p className="text-sm text-slate-500">
-          Commit details are hidden for this activity. Aggregate counts remain visible.
-        </p>
-      ) : (
-        <p className="text-sm text-slate-500">
-          No qualifying activity was recorded for this day. If history is still backfilling, this
-          may be incomplete.
-        </p>
-      )}
+                    <span className="font-medium text-primary">{project.displayTitle}</span>
+                    <span className="tabular text-xs text-secondary">
+                      {project.commitCount} commit{project.commitCount === 1 ? "" : "s"}
+                      {changeSummary ? (
+                        <span className="ml-2 font-mono text-[11px] text-muted">{changeSummary}</span>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        {commits.length > 0 ? (
+          <div>
+            <h3 className="mb-3 text-[11px] font-medium tracking-[0.12em] text-muted uppercase">
+              Commit ledger
+            </h3>
+            <ol className="relative space-y-4 border-l border-line pl-4">
+              {commits.map((commit) => (
+                <li className="relative" key={commit.sha}>
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1.5 -left-[1.21rem] h-2 w-2 rounded-full border border-line bg-canvas"
+                  />
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+                    <span className="rounded border border-line bg-surface px-1 py-0.5 text-secondary">
+                      {commit.sha.slice(0, 7)}
+                    </span>
+                    <span className="text-secondary">
+                      {commit.projectTitle || commit.projectSlug}
+                    </span>
+                    <span>·</span>
+                    <span>{commit.authorName}</span>
+                    <span>·</span>
+                    <time className="tabular" dateTime={commit.authorDate}>
+                      {formatTime(commit.authorDate, timezone)}
+                    </time>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-start justify-between gap-2">
+                    <p className="max-w-xl text-sm leading-6 whitespace-pre-line text-primary">
+                      {firstLine(commit.message)}
+                    </p>
+                    {commit.htmlUrl ? (
+                      <a
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1 rounded text-xs font-medium text-secondary transition-colors hover:text-primary",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                        )}
+                        href={commit.htmlUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        View
+                        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+                      </a>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : totalCommits > 0 ? (
+          <div className="flex items-start gap-3 rounded-md border border-line bg-surface p-4">
+            <Lock aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+            <p className="text-sm leading-6 text-secondary">
+              Commit details are hidden for this activity. Aggregate counts remain visible and
+              private repository history is never exposed.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm leading-6 text-secondary">
+            No qualifying activity was recorded for this day. If history is still backfilling, this
+            may be incomplete.
+          </p>
+        )}
+      </div>
     </section>
   );
 }

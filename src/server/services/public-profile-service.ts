@@ -1,4 +1,4 @@
-import type { ActivityDetail, ProjectStatus } from "@/generated/prisma/enums";
+﻿import type { ActivityDetail, ProjectStatus } from "@/generated/prisma/enums";
 import type { AppPrismaClient } from "@/lib/db/prisma-factory";
 import {
   addDays,
@@ -15,6 +15,7 @@ export type PublicProjectCardDto = {
   shortDescription: string | null;
   status: ProjectStatus;
   demoUrl: string | null;
+  firstCommitAt: string | null;
   latestCommitAt: string | null;
 };
 
@@ -30,8 +31,8 @@ export type PublicProfileDto = {
 
 export type PublicProjectDto = PublicProjectCardDto & {
   readmeMarkdown: string | null;
-  firstCommitAt: string | null;
   latestCommitAt: string | null;
+  totalCommits: number;
   activityDetail: ActivityDetail;
   searchIndexingEnabled: boolean;
   owner: {
@@ -153,6 +154,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
               shortDescription: true,
               status: true,
               demoUrl: true,
+              firstCommitAt: true,
               latestCommitAt: true,
             },
             orderBy: { updatedAt: "desc" },
@@ -168,6 +170,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
         ...record,
         projects: record.projects.map((project) => ({
           ...project,
+          firstCommitAt: toIso(project.firstCommitAt),
           latestCommitAt: toIso(project.latestCommitAt),
         })),
       };
@@ -266,6 +269,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
           },
           userRepository: {
             select: {
+              id: true,
               publicActivityDetail: true,
               githubRepository: {
                 select: {
@@ -285,6 +289,9 @@ export function createPublicProfileService(db: AppPrismaClient) {
         return null;
       }
 
+      const totalCommits = await db.commit.count({
+        where: { userRepositoryId: record.userRepository.id },
+      });
       const repository = record.userRepository.githubRepository;
       const canExposeRepository = repository.visibility === "PUBLIC";
 
@@ -298,6 +305,7 @@ export function createPublicProfileService(db: AppPrismaClient) {
         readmeMarkdown: record.publicReadmeMarkdown,
         firstCommitAt: toIso(record.firstCommitAt),
         latestCommitAt: toIso(record.latestCommitAt),
+        totalCommits,
         activityDetail: record.userRepository.publicActivityDetail,
         searchIndexingEnabled: record.user.searchIndexingEnabled,
         owner: {
